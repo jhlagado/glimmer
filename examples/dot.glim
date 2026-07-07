@@ -4,9 +4,9 @@
 ; arranged like arrows: 2 = up, 8 = down, 4 = left, 6 = right.
 ; The dot stops at every edge and cannot go further.
 ;
-; One press = one step (rising-edge bindings). This is deliberately the
-; barest possible input-to-pixel program: four pulses, two state cells,
-; five effects.
+; Held keys autorepeat every 8 frames, so the dot glides while a key is
+; held down. This is the barest input-to-pixel program: four pulses, two
+; state cells, five blocks.
 
 program Dot
 
@@ -21,10 +21,10 @@ pulse Down
 pulse Left
 pulse Right
 
-bind key KEY_2 rising -> Up
-bind key KEY_8 rising -> Down
-bind key KEY_4 rising -> Left
-bind key KEY_6 rising -> Right
+bind key KEY_2 held period 8 -> Up
+bind key KEY_8 held period 8 -> Down
+bind key KEY_4 held period 8 -> Left
+bind key KEY_6 held period 8 -> Right
 
 effect MoveUp
     on Up

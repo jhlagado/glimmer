@@ -135,7 +135,8 @@ debug80.json carries a `dot` target. Example: `examples/dot.glim` — the
 deliberately bare-bones input-to-pixel program (keypad-moved dot,
 edge-clamped). The generic profile remains the default.
 
-**Change-flag rollover (raised 2026-07-07; upgrade v0.2 candidate).**
+**Change-flag rollover. ✅ Fixed in v0.2 (the design note below was the
+defect report).**
 v0 clears all change flags at frame end, so a backward dependency —
 logic updating a cell that a derive effect (or an earlier-declared
 effect in the same phase) triggers on — is dropped, not deferred: the
@@ -159,17 +160,24 @@ collide at assembly with an error pointing at generated code. Add a
 Glimmer diagnostic suggesting `_loop`. Likewise the planned
 "body updates a declared cell not listed in `updates`" warning.
 
-**v0.2 — Matrix runtime, second slice.** `held` bindings with repeat
-periods (`rising` stays edge-only); built-in frame counter; the timing
-widget family — `timer` (oscillator: fires and reloads), `timer ...
-once` (monostable gate), and `ramp` (P9's monostable progress counter:
-steps each frame, cell marked changed each step, completion pulse,
-retriggered by writing the cell); change-flag rollover (per-frame
-producers like ramps need deferral, not dropping); per-tick sound + HUD
-service in the scan loop. Growth path for dot.glim: a linear ramp slide
-(motion that is not one-keypress-one-step), then a trail-drawing mode,
-then snake — each addition should force exactly one new format
-feature.
+**v0.2 — Matrix runtime, second slice. ✅ Landed 2026-07-07.**
+`held period N` bindings (first press fires, then autorepeats;
+tec1g-mon3); the timing widget family — `timer` (oscillator: writable
+period cell + hidden countdown), `timer ... once` (one-shot countdown,
+rearmed by writing), `ramp` (progress counter: steps each frame, cell
+marked changed each step, completion pulse, idles at terminal,
+retriggered by writing); built-in `FrameCount` (flag bit allocated only
+when used); change-flag rollover (Raised0/Next0: raises whose consumers
+are all later deliver same-frame at phase boundaries, raises any of
+whose consumers already ran defer whole to next frame — exactly-once,
+declaration order never semantic); per-row sound + seven-segment HUD
+service in the scan loop with SndStart/HudWriteU16/HudBlankDig library
+routines. Example: `examples/slide.glim` — press GO, a dot slides
+across over 64 frames driven by a ramp through a compute block, a timer
+blinks it, arrival beeps and bumps a HUD counter; `examples/dot.glim`
+movement is now held-autorepeat. Both pass `--rc strict
+--reg-profile mon3`. Remaining growth path: trail-drawing mode, then
+snake.
 
 **v0.3 — Resources and scale.** Declarative resources compiled to data
 tables: shapes/sprites (row bitmaps + colour), tunes, LCD text/scripts,

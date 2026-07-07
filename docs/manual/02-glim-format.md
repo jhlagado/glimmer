@@ -76,6 +76,44 @@ Declares an input binding. In the current version the only form is a
 rising-edge key binding onto a pulse: the pulse fires on the frame the key
 is first pressed, not while it is held.
 
+## timer and ramp
+
+```
+timer Blink : byte = 12 -> BlinkTick
+timer Gate : word = 384 -> GateOpen once
+ramp Travel : byte steps 64 -> Arrived
+```
+
+Timing widgets count once per frame and fire pulses.
+
+A `timer` is an oscillator: its cell is the period — writable like any
+state, so `updates Blink` changes the speed from the next cycle — and a
+hidden countdown fires the pulse and reloads each time it runs out. With
+`once` the cell is the countdown itself: it fires a single time when it
+reaches zero and stays idle until your code writes it again.
+
+A `ramp` is a progress counter for motion: each frame it steps toward
+`steps - 1`, marking its cell changed at every step so `compute` and
+`render` blocks can follow it, and fires its pulse on arrival. It idles
+at the terminal value; writing the cell (usually to 0) starts it moving
+again. Timer cells carry no change flag — trigger on the pulse; ramp
+cells do, because the journey is the point.
+
+The built-in `FrameCount` cell increments every frame and may be used
+in `on` for blocks that run continuously.
+
+## bind ... held
+
+```
+bind key KEY_4 held period 8 -> Left
+```
+
+A `held` binding fires on the first press like `rising`, then
+autorepeats every `period` frames while the key stays down — the
+standard movement pattern for action games. Available on the
+tec1g-mon3 platform, where MON-3's `_scanKeys` reports held keys
+directly.
+
 ## compute, effect, render
 
 ```
@@ -124,6 +162,25 @@ block can have its own `_done`.
 
 Block bodies fall through — do not end them with `ret`. The generated
 wrapper appends the change-flag bookkeeping and the `ret`.
+
+## Sound and the seven-segment display
+
+On the matrix profile, the generated scan loop services a speaker and
+the six-digit seven-segment display once per scanned row (8 ticks per
+frame). Blocks drive them through library routines:
+
+- `SndStart` — A = duration in row ticks, C = divider (smaller is
+  higher pitch); the tone plays out in the background.
+- `HudWriteU16` — HL = value, shown as five decimal digits.
+- `HudBlankDig` — clear the display.
+
+## How changes travel between frames
+
+Delivery of changes is exactly-once. A block's `updates` land the same
+frame for blocks in later phases (compute -> effect -> render), and
+roll over to the next frame when a depending block's phase has already
+run — including blocks in the same phase, so the order you declare
+blocks in never affects behaviour.
 
 ## Current limits
 

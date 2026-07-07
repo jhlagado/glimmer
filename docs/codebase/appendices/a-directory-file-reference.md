@@ -31,10 +31,11 @@ or change purpose.
 
 ## examples/
 
-| File           | Purpose                                                              |
-| -------------- | -------------------------------------------------------------------- |
-| `counter.glim` | CounterToy from the specification, section 10 (generic profile)      |
-| `dot.glim`     | Minimal tec1g-mon3/matrix8x8 program: keypad-moved dot, edge-clamped |
+| File           | Purpose                                                            |
+| -------------- | ------------------------------------------------------------------ |
+| `counter.glim` | CounterToy from the specification, section 10 (generic profile)    |
+| `dot.glim`     | Minimal tec1g-mon3/matrix8x8 program: held-key dot, edge-clamped   |
+| `slide.glim`   | v0.2 showcase: ramp-driven slide, compute, timer blink, sound, HUD |
 
 The repo root also carries `debug80.json` with a `dot` target so the
 generated `examples/dot.asm` runs under Debug80's TEC-1G platform.

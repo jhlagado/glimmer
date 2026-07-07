@@ -87,7 +87,10 @@ describe('tec1g-mon3 matrix8x8 profile', () => {
   });
 
   it('rejects unknown MON-3 keys', () => {
-    const bad = dot.replace('bind key KEY_2 rising -> Up', 'bind key KEY_TURBO rising -> Up');
+    const bad = dot.replace(
+      'bind key KEY_2 held period 8 -> Up',
+      'bind key KEY_TURBO rising -> Up',
+    );
     const { program, diagnostics } = parseGlimmer(bad);
     expect(program).toBeNull();
     expect(diagnostics.map((d) => d.message).join('\n')).toContain('Unknown tec1g-mon3 key');
@@ -100,6 +103,66 @@ describe('tec1g-mon3 matrix8x8 profile', () => {
     expect(result.source).toContain(';! clobbers A,BC,DE,HL,IX,IY');
     const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-dot-'));
     const entry = path.join(dir, 'dot.asm');
+    writeFileSync(entry, result.source!);
+    const assembled = await compile(entry, {
+      emitBin: true,
+      emitHex: false,
+      emitD8m: false,
+      registerContracts: 'strict',
+      registerContractsProfile: 'mon3',
+    });
+    expect(assembled.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+    expect(assembled.artifacts.find((a) => a.kind === 'bin')).toBeDefined();
+  });
+});
+
+describe('v0.2 runtime (slide example)', () => {
+  const slide = readFileSync(path.join(import.meta.dirname, '../examples/slide.glim'), 'utf8');
+
+  it('generates rollover, timer, ramp, and service machinery', () => {
+    const { program, diagnostics: parseDiags } = parseGlimmer(slide);
+    expect(parseDiags).toEqual([]);
+    const { source, diagnostics } = generateAzm(program!);
+    expect(diagnostics).toEqual([]);
+
+    // Rollover: StartSlide (logic) rewinds Travel, whose consumer
+    // TrackDot (compute/derive) already ran — the raise must defer.
+    expect(source).toContain('or      CHG_TRAVEL');
+    expect(source).toContain('ld      (Next0),a');
+    // Same-frame path: Twinkle (logic) updates Visible for render.
+    expect(source).toContain('ld      (Raised0),a');
+    expect(source).toContain('@__MergeRaised:');
+    // End of frame rolls deferred raises over instead of clearing.
+    expect(source).toContain('ld      a,(Next0)            ; deferred raises become next frame');
+
+    // Timer: hidden countdown reloading from the writable period cell.
+    expect(source).toContain('Glim_Blink_cnt:');
+    expect(source).toContain('ld      a,(Blink)       ; reload from period cell');
+    // Ramp: idle at terminal, completion pulse.
+    expect(source).toContain('Travel:           .db 63   ; ramp progress, idle at terminal');
+    expect(source).toContain('ld      (Arrived),a');
+
+    // Sound + HUD serviced per scan row; library present.
+    expect(source).toContain('call    SndService');
+    expect(source).toContain('call    HudScanDig');
+    expect(source).toContain('@SndStart:');
+    expect(source).toContain('@HudWriteU16:');
+  });
+
+  it('generates held-binding autorepeat for the Dot example', () => {
+    const dotSrc = readFileSync(path.join(import.meta.dirname, '../examples/dot.glim'), 'utf8');
+    const { program } = parseGlimmer(dotSrc);
+    const { source } = generateAzm(program!);
+    expect(source).toContain('Glim_HeldKey:');
+    expect(source).toContain('__PollNewPress:');
+    expect(source).toContain('ld      (Glim_HeldCount),a');
+  });
+
+  it('generated Slide source assembles and passes strict register contracts', async () => {
+    const result = compileToAzm(slide);
+    expect(result.diagnostics).toEqual([]);
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-slide-'));
+    const entry = path.join(dir, 'slide.asm');
     writeFileSync(entry, result.source!);
     const assembled = await compile(entry, {
       emitBin: true,

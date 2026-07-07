@@ -76,6 +76,28 @@ Notable constraints the generator honours:
   `--rc strict --reg-profile mon3`; the Dot round-trip test enforces
   this.
 
+## The v0.2 runtime
+
+- **Rollover** (`Changed0`/`Raised0`/`Next0`): block updates raise into
+  `Raised0` when every consumer is in a later phase (merged into
+  `Changed0` at phase boundaries by `__MergeRaised`) or into `Next0`
+  when any consumer's phase already ran (rolled into `Changed0` by
+  `__EndFrame`). The now/next split is computed per block at compile
+  time from the `on`/`updates` graph — exactly-once delivery,
+  declaration order never semantic.
+- **Timing widgets** tick in `__TickTimers` before any phase, raising
+  directly into `Changed0`: oscillator timers (writable period cell +
+  hidden `Glim_<name>_cnt` countdown), `once` timers (the cell is the
+  countdown), ramps (step, flag the cell, fire at terminal), and
+  `FrameCount` when used.
+- **Held bindings** (tec1g) arm `Glim_HeldKey`/`Glim_HeldCount` on the
+  new press and refire every period frames while `_scanKeys` reports
+  the same key held.
+- **Scan services**: `ScanFrame` calls `SndService` and `HudScanDig`
+  once per row; the library adds `SndStart`, `HudWriteU16`,
+  `HudBlankDig`, and the glyph/mask tables (adapted from the corpus
+  shared layer, 0BSD).
+
 ## Profiles
 
 `generateAzm` branches on `program.platform`:

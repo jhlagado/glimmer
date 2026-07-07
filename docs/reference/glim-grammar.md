@@ -97,8 +97,22 @@ cell-type       ::= "byte" | "word"
 
 pulse-decl      ::= "pulse" identifier
 
-bind-decl       ::= "bind" "key" key-name "rising" "->" identifier
+bind-decl       ::= "bind" "key" key-name trigger "->" identifier
+trigger         ::= "rising"
+                  | "held" "period" number          ; tec1g-mon3 only
 key-name        ::= identifier                      ; validated per platform
+
+timer-decl      ::= "timer" identifier ":" cell-type "=" number
+                    "->" identifier ( "once" )?
+                  ; oscillator: the cell is the writable period, a hidden
+                  ; countdown reloads from it after each fire. once: the
+                  ; cell is the countdown; fires once, rearmed by writing.
+
+ramp-decl       ::= "ramp" identifier ":" "byte" "steps" number
+                    "->" identifier
+                  ; monostable progress counter: steps each frame, marks
+                  ; its cell changed each step, fires the pulse at
+                  ; steps-1, idles there; retriggered by writing the cell.
 
 block-decl      ::= block-kind identifier
                     block-header*
@@ -131,44 +145,39 @@ Semantic constraints enforced after parsing:
 - `on` names must be declared cells; `updates` names must be states
 - every block needs at least one `on` trigger
 - `render` blocks take no `updates`; `compute` blocks require `updates`
+- timer and ramp targets must be declared pulses; timer cells carry no
+  change flag (trigger on the pulse), so they may appear in `updates`
+  but not `on`; ramp cells may appear in both
+- the built-in `FrameCount` may appear in `on`; it increments every
+  frame and occupies a flag bit only when used
 - `end` terminates a body when it is the only word on the line
 
 ## The dataflow, in one paragraph
 
-`bind` turns an input event into a pulse. A cell being marked changed is
-what makes effects run: an effect runs in its phase when any `on` cell
-changed, and after it runs its `updates` cells are marked changed, which
-can make later-phase effects run in the same frame. Pulses and change
-flags clear at the end of every frame. That is the whole model; `->` is
-its only symbol.
+`bind` turns an input event into a pulse; timers and ramps fire pulses
+on their own schedule. A cell being marked changed is what makes blocks
+run: a block runs in its phase when any `on` cell changed, and after it
+runs its `updates` cells are marked changed. Delivery is exactly-once:
+a raise whose consumers are all in later phases lands the same frame; a
+raise any of whose consumers already ran (an earlier or equal phase)
+rolls over whole to the next frame. Declaration order is never
+semantic. Pulses clear at the end of every frame; deferred raises
+become the next frame's changes. That is the whole model; `->` is its
+only symbol.
 
 ## Proposed grammar (sketches — not implemented)
 
 From `sketches/tetro.glim` and `sketches/sprite-chase.glim`. Each
-proposal is held to the same symbol rules; note that `timer` composes
-all three symbols with their standard meanings and nothing new.
+proposal is held to the same symbol rules. (Timers, ramps, and held
+bindings graduated to the implemented grammar in v0.2.)
 
 ```text
-bind-decl       ::= "bind" "key" key-name trigger "->" identifier
-trigger         ::= "rising" | "held" "period" number
-
-timer-decl      ::= "timer" identifier ":" cell-type "=" number
-                    "->" identifier ( "once" )?
-                  ; "Gravity is a byte, starting at 32, fires
-                  ;  GravityFire (once)."
-
 curve-decl      ::= "curve" identifier preset "steps" number
                     ( "from" number "to" number )?
                   ; table computed at build time; presets: linear,
                   ; ease_in, ease_out, ease_in_out, sine, overshoot,
                   ; anticipation. Explicit value-list form also planned.
 preset          ::= identifier
-
-ramp-decl       ::= "ramp" identifier ":" cell-type "steps" number
-                    "->" identifier
-                  ; monostable progress counter: steps each frame,
-                  ; marks its cell changed each step, fires the pulse
-                  ; on completion; retriggered by writing the cell.
 
 routine-decl    ::= "routine" identifier
                     contract-comment?

@@ -26,9 +26,21 @@
       "profile": "mon3",
       "tec1g": {
         "regions": [
-          { "start": 0, "end": 2047, "kind": "rom" },
-          { "start": 2048, "end": 32767, "kind": "ram" },
-          { "start": 49152, "end": 65535, "kind": "rom" }
+          {
+            "start": 0,
+            "end": 2047,
+            "kind": "rom"
+          },
+          {
+            "start": 2048,
+            "end": 32767,
+            "kind": "ram"
+          },
+          {
+            "start": 49152,
+            "end": 65535,
+            "kind": "rom"
+          }
         ],
         "appStart": 16384,
         "entry": 0
@@ -36,6 +48,36 @@
       "sourceFile": "examples/dot.asm",
       "asm": "examples/dot.asm",
       "artifactBase": "dot",
+      "sourceRoots": ["examples"]
+    },
+    "slide": {
+      "outputDir": "build",
+      "platform": "tec1g",
+      "profile": "mon3",
+      "tec1g": {
+        "regions": [
+          {
+            "start": 0,
+            "end": 2047,
+            "kind": "rom"
+          },
+          {
+            "start": 2048,
+            "end": 32767,
+            "kind": "ram"
+          },
+          {
+            "start": 49152,
+            "end": 65535,
+            "kind": "rom"
+          }
+        ],
+        "appStart": 16384,
+        "entry": 0
+      },
+      "sourceFile": "examples/slide.asm",
+      "asm": "examples/slide.asm",
+      "artifactBase": "slide",
       "sourceRoots": ["examples"]
     }
   }

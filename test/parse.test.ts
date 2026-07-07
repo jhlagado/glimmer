@@ -148,6 +148,68 @@ describe('parseGlimmer', () => {
     );
   });
 
+  it('parses timers, ramps, and held bindings', () => {
+    const source = [
+      'program P',
+      'platform tec1g-mon3',
+      'display matrix8x8',
+      'pulse Tick',
+      'pulse DoneP',
+      'pulse Fire',
+      'timer Blink : byte = 12 -> Tick',
+      'timer Gate : word = 384 -> DoneP once',
+      'ramp Travel : byte steps 64 -> Fire',
+      'bind key KEY_4 held period 8 -> Tick',
+    ].join('\n');
+    const { program, diagnostics } = parseGlimmer(source);
+    expect(diagnostics).toEqual([]);
+    expect(program?.timers).toEqual([
+      expect.objectContaining({ name: 'Blink', type: 'byte', initial: 12, once: false }),
+      expect.objectContaining({ name: 'Gate', type: 'word', initial: 384, once: true }),
+    ]);
+    expect(program?.ramps).toEqual([
+      expect.objectContaining({ name: 'Travel', steps: 64, target: 'Fire' }),
+    ]);
+    expect(program?.bindings[0]).toEqual(
+      expect.objectContaining({ edge: 'held', period: 8, target: 'Tick' }),
+    );
+  });
+
+  it('validates timer and ramp semantics', () => {
+    const timerInOn = [
+      'program P',
+      'pulse Tick',
+      'timer Blink : byte = 12 -> Tick',
+      'effect E',
+      'on Blink',
+      'begin',
+      'end',
+    ].join('\n');
+    expect(
+      parseGlimmer(timerInOn)
+        .diagnostics.map((d) => d.message)
+        .join('\n'),
+    ).toContain('timer cells carry no change flag');
+
+    const heldGeneric = ['program P', 'pulse Go', 'bind key KEY_1 held period 8 -> Go'].join('\n');
+    expect(
+      parseGlimmer(heldGeneric)
+        .diagnostics.map((d) => d.message)
+        .join('\n'),
+    ).toContain('Held bindings require platform tec1g-mon3');
+
+    const frameCount = [
+      'program P',
+      'state X : byte',
+      'compute C',
+      'on FrameCount',
+      'updates X',
+      'begin',
+      'end',
+    ].join('\n');
+    expect(parseGlimmer(frameCount).diagnostics).toEqual([]);
+  });
+
   it('rejects reserved names', () => {
     const source = ['program P', 'state Framebuffer : byte', 'pulse GlimTick'].join('\n');
     const { diagnostics } = parseGlimmer(source);

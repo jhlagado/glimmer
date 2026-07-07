@@ -33,10 +33,15 @@ block bodies) into one generated AZM source file, which AZM assembles into
 - `examples/counter.glim` — CounterToy from the spec (generic profile)
 - `examples/dot.glim` — a keypad-moved dot on the real TEC-1G 8x8 RGB
   matrix (`platform tec1g-mon3` + `display matrix8x8`): MON-3 `_scanKeys`
-  input, scan-driven display loop, edge-clamped movement. The repo's
-  `debug80.json` carries a `dot` target, so after
-  `node dist/src/cli.js examples/dot.glim && npx azm examples/dot.asm`
-  it runs under Debug80.
+  input with held-key autorepeat, scan-driven display loop, edge-clamped
+  movement.
+- `examples/slide.glim` — the v0.2 runtime: a ramp slides a dot across
+  the matrix through a compute block, a timer blinks it, arrival beeps
+  through the speaker service and bumps a seven-segment counter.
+
+The repo's `debug80.json` carries `dot` and `slide` targets, so after
+`node dist/src/cli.js examples/<name>.glim && npx azm examples/<name>.asm`
+they run under Debug80.
 
 ## Getting Started
 

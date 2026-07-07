@@ -8,7 +8,10 @@
  *   display <name>           (optional; currently matrix8x8, needs platform)
  *   state <Name> : <byte|word> [= <value>] [changed]
  *   pulse <Name>
+ *   timer <Name> : <byte|word> = <N> -> <PulseName> [once]
+ *   ramp <Name> : byte steps <N> -> <PulseName>
  *   bind key <KEY_NAME> rising -> <PulseName>
+ *   bind key <KEY_NAME> held period <N> -> <PulseName>   (tec1g only)
  *   compute <Name>   |  effect <Name>  |  render <Name>
  *       on <Cell>[, <Cell>...]           (the keyword is the phase:
  *       updates <Cell>[, <Cell>...]       compute=derive, effect=logic,
@@ -26,9 +29,11 @@ import type {
   GlimmerDiagnostic,
   GlimmerProgram,
   PulseDecl,
+  RampDecl,
   StateDecl,
+  TimerDecl,
 } from './model.js';
-import { TEC1G_KEY_CODES } from './model.js';
+import { FRAME_COUNT, TEC1G_KEY_CODES } from './model.js';
 
 const PLATFORMS = ['tec1g-mon3'];
 const DISPLAYS = ['matrix8x8'];
@@ -42,7 +47,11 @@ const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const STATE_RE =
   /^state\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(byte|word)(?:\s*=\s*(\S+))?(\s+changed)?$/;
 const BIND_KEY_RE =
-  /^bind\s+key\s+([A-Za-z_][A-Za-z0-9_]*)\s+rising\s*->\s*([A-Za-z_][A-Za-z0-9_]*)$/;
+  /^bind\s+key\s+([A-Za-z_][A-Za-z0-9_]*)\s+(rising|held\s+period\s+\S+)\s*->\s*([A-Za-z_][A-Za-z0-9_]*)$/;
+const TIMER_RE =
+  /^timer\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(byte|word)\s*=\s*(\S+)\s*->\s*([A-Za-z_][A-Za-z0-9_]*)(\s+once)?$/;
+const RAMP_RE =
+  /^ramp\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*byte\s+steps\s+(\S+)\s*->\s*([A-Za-z_][A-Za-z0-9_]*)$/;
 
 function stripComment(line: string): string {
   const semi = line.indexOf(';');
@@ -77,6 +86,8 @@ export function parseGlimmer(source: string): ParseResult {
   let display: string | null = null;
   const states: StateDecl[] = [];
   const pulses: PulseDecl[] = [];
+  const timers: TimerDecl[] = [];
+  const ramps: RampDecl[] = [];
   const bindings: Binding[] = [];
   const effects: EffectDecl[] = [];
 
@@ -159,22 +170,87 @@ export function parseGlimmer(source: string): ParseResult {
       continue;
     }
 
+    if (text.startsWith('timer ')) {
+      const match = TIMER_RE.exec(text);
+      if (!match) {
+        error(
+          lineNo,
+          `Invalid timer declaration: "${text}". Expected: timer <Name> : <byte|word> = <N> -> <Pulse> [once].`,
+        );
+        continue;
+      }
+      const initial = parseNumber(match[3] as string);
+      if (initial === null || initial < 1) {
+        error(lineNo, `Timer ${match[1]}: period must be a number of at least 1.`);
+        continue;
+      }
+      timers.push({
+        name: match[1] as string,
+        type: match[2] as TimerDecl['type'],
+        initial,
+        target: match[4] as string,
+        once: match[5] !== undefined,
+        line: lineNo,
+      });
+      continue;
+    }
+
+    if (text.startsWith('ramp ')) {
+      const match = RAMP_RE.exec(text);
+      if (!match) {
+        error(
+          lineNo,
+          `Invalid ramp declaration: "${text}". Expected: ramp <Name> : byte steps <N> -> <Pulse>.`,
+        );
+        continue;
+      }
+      const steps = parseNumber(match[2] as string);
+      if (steps === null || steps < 2 || steps > 256) {
+        error(lineNo, `Ramp ${match[1]}: steps must be between 2 and 256.`);
+        continue;
+      }
+      ramps.push({
+        name: match[1] as string,
+        steps,
+        target: match[3] as string,
+        line: lineNo,
+      });
+      continue;
+    }
+
     if (text.startsWith('bind ')) {
       const match = BIND_KEY_RE.exec(text);
       if (!match) {
         error(
           lineNo,
-          `Unsupported binding: "${text}". v0 supports: bind key <KEY> rising -> <Pulse>.`,
+          `Invalid binding: "${text}". Expected: bind key <KEY> rising -> <Pulse>, or bind key <KEY> held period <N> -> <Pulse>.`,
         );
         continue;
       }
-      bindings.push({
-        kind: 'key',
-        key: match[1] as string,
-        edge: 'rising',
-        target: match[2] as string,
-        line: lineNo,
-      });
+      const trigger = match[2] as string;
+      if (trigger === 'rising') {
+        bindings.push({
+          kind: 'key',
+          key: match[1] as string,
+          edge: 'rising',
+          target: match[3] as string,
+          line: lineNo,
+        });
+      } else {
+        const period = parseNumber(trigger.replace(/^held\s+period\s+/, ''));
+        if (period === null || period < 1 || period > 255) {
+          error(lineNo, `Held binding period must be between 1 and 255.`);
+          continue;
+        }
+        bindings.push({
+          kind: 'key',
+          key: match[1] as string,
+          edge: 'held',
+          period,
+          target: match[3] as string,
+          line: lineNo,
+        });
+      }
       continue;
     }
 
@@ -289,15 +365,31 @@ export function parseGlimmer(source: string): ParseResult {
         );
       }
     }
+  } else {
+    for (const binding of bindings) {
+      if (binding.edge === 'held') {
+        error(binding.line, 'Held bindings require platform tec1g-mon3.');
+      }
+    }
   }
 
-  validateReferences({ states, pulses, bindings, effects }, diagnostics);
+  validateReferences({ states, pulses, timers, ramps, bindings, effects }, diagnostics);
 
   if (diagnostics.length > 0 || programName === null) {
     return { program: null, diagnostics };
   }
   return {
-    program: { name: programName, platform, display, states, pulses, bindings, effects },
+    program: {
+      name: programName,
+      platform,
+      display,
+      states,
+      pulses,
+      timers,
+      ramps,
+      bindings,
+      effects,
+    },
     diagnostics,
   };
 }
@@ -310,7 +402,7 @@ function splitNames(text: string): string[] {
 }
 
 function validateReferences(
-  parts: Pick<GlimmerProgram, 'states' | 'pulses' | 'bindings' | 'effects'>,
+  parts: Pick<GlimmerProgram, 'states' | 'pulses' | 'timers' | 'ramps' | 'bindings' | 'effects'>,
   diagnostics: GlimmerDiagnostic[],
 ): void {
   const error = (line: number, message: string): void => {
@@ -338,26 +430,59 @@ function validateReferences(
 
   for (const state of parts.states) declare(state.name, state.line, 'state');
   for (const pulse of parts.pulses) declare(pulse.name, pulse.line, 'pulse');
+  for (const timer of parts.timers) declare(timer.name, timer.line, 'timer');
+  for (const ramp of parts.ramps) declare(ramp.name, ramp.line, 'ramp');
   for (const effect of parts.effects) declare(effect.name, effect.line, 'effect');
 
-  const cellNames = new Set([...parts.states, ...parts.pulses].map((cell) => cell.name));
-  const stateNames = new Set(parts.states.map((state) => state.name));
+  // `on` accepts anything with a change flag: states, pulses, ramps, and
+  // the built-in FrameCount. `updates` accepts what code may write:
+  // states, timers (the period register), and ramps (retriggering).
+  // Timer cells carry no flag — the pulse is the notification — so they
+  // cannot appear in `on`.
   const pulseNames = new Set(parts.pulses.map((pulse) => pulse.name));
+  const timerNames = new Set(parts.timers.map((timer) => timer.name));
+  const onNames = new Set([
+    ...parts.states.map((s) => s.name),
+    ...pulseNames,
+    ...parts.ramps.map((r) => r.name),
+    FRAME_COUNT,
+  ]);
+  const updateNames = new Set([
+    ...parts.states.map((s) => s.name),
+    ...timerNames,
+    ...parts.ramps.map((r) => r.name),
+  ]);
 
   for (const binding of parts.bindings) {
     if (!pulseNames.has(binding.target)) {
       error(binding.line, `Binding target "${binding.target}" is not a declared pulse.`);
     }
   }
+  for (const timer of parts.timers) {
+    if (!pulseNames.has(timer.target)) {
+      error(
+        timer.line,
+        `Timer ${timer.name} fires "${timer.target}", which is not a declared pulse.`,
+      );
+    }
+  }
+  for (const ramp of parts.ramps) {
+    if (!pulseNames.has(ramp.target)) {
+      error(ramp.line, `Ramp ${ramp.name} fires "${ramp.target}", which is not a declared pulse.`);
+    }
+  }
 
   for (const effect of parts.effects) {
     for (const dep of effect.depends) {
-      if (!cellNames.has(dep)) {
-        error(effect.line, `Effect ${effect.name} triggers on undeclared cell "${dep}".`);
+      if (!onNames.has(dep)) {
+        const hint = timerNames.has(dep)
+          ? ` (timer cells carry no change flag; trigger on the timer's pulse instead)`
+          : '';
+        error(effect.line, `Effect ${effect.name} triggers on undeclared cell "${dep}".${hint}`);
       }
     }
     for (const target of effect.updates) {
-      if (!stateNames.has(target)) {
+      if (!updateNames.has(target)) {
         error(effect.line, `Effect ${effect.name} updates undeclared state "${target}".`);
       }
     }
@@ -388,4 +513,22 @@ const RESERVED_NAMES = new Set([
   'API_DrawChar',
   'API_FlushDisplay',
   'API_InitDisplay',
+  'FrameCount',
+  'PortDigits',
+  'PortSegs',
+  'SpeakerBit',
+  'SpeakerPort',
+  'SoundTimer',
+  'SndDivReload',
+  'SndDivCount',
+  'SndStart',
+  'SndService',
+  'HudScanDig',
+  'HudBlankDig',
+  'HudWriteU16',
+  'HudDecDigit',
+  'HudSegBuffer',
+  'HudScanIndex',
+  'HudMaskTbl',
+  'HudGlyphTbl',
 ]);

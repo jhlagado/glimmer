@@ -1,0 +1,91 @@
+; Slide — motion that is not one-keypress-one-step.
+;
+; Press GO: a green dot slides across the row over 64 frames, a beep
+; marks its arrival, and the seven-segment display counts completed
+; slides. A timer blinks the dot while it travels.
+;
+; This program exercises the v0.2 runtime: a ramp drives per-frame
+; motion, a compute block maps progress to position (and receives a
+; deferred change flag when StartSlide rewinds the ramp from the logic
+; phase), a timer provides the blink, and the profile's sound and HUD
+; services are called directly.
+
+program Slide
+
+platform tec1g-mon3
+display matrix8x8
+
+state DotX    : byte = 0 changed
+state Slides  : word = 0 changed
+state Visible : byte = 1
+
+pulse Go
+pulse Arrived
+pulse BlinkTick
+
+ramp Travel : byte steps 64 -> Arrived
+timer Blink : byte = 12 -> BlinkTick
+
+bind key KEY_GO rising -> Go
+
+effect StartSlide
+    on Go
+    updates Travel
+begin
+    xor a
+    ld (Travel),a       ; rewind the ramp: the slide begins
+end
+
+compute TrackDot
+    on Travel
+    updates DotX
+begin
+    ld a,(Travel)
+    srl a
+    srl a
+    srl a               ; 64 steps -> 8 cells
+    ld (DotX),a
+end
+
+effect CountArrival
+    on Arrived
+    updates Slides
+begin
+    ld hl,(Slides)
+    inc hl
+    ld (Slides),hl
+    ld a,24             ; arrival beep: 24 row ticks
+    ld c,3
+    call SndStart
+end
+
+effect Twinkle
+    on BlinkTick
+    updates Visible
+begin
+    ld a,(Visible)
+    xor 1
+    ld (Visible),a
+end
+
+render DrawDot
+    on DotX, Visible
+begin
+    call FbClear
+    ld a,(Visible)
+    or a
+    jr z,_hidden
+    ld a,(DotX)
+    ld b,a
+    ld c,3
+    ld a,COLOR_GREEN
+    call FbPlot
+_hidden:
+end
+
+render ShowScore
+    on Slides
+begin
+    ld hl,(Slides)
+    call HudWriteU16
+end
