@@ -2,7 +2,7 @@
  * Glimmer public API.
  *
  * Glimmer is a preprocessor for AZM: it compiles a structured program
- * (state cells, pulses, bindings, effects and Z80 fragments)
+ * (state cells, pulses, bindings, effects and Z80 blocks)
  * into a single generated AZM source file.
  */
 

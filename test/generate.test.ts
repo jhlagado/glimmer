@@ -17,43 +17,43 @@ describe('generateAzm', () => {
     const { source, diagnostics } = generateAzm(program!);
     expect(diagnostics).toEqual([]);
 
-    // Dirty bits: states first, then pulses, in declaration order.
-    expect(source).toContain('D_COUNT_BIT       .equ 0');
-    expect(source).toContain('D_INCPRESSED_BIT  .equ 1');
-    expect(source).toContain('D_DECPRESSED_BIT  .equ 2');
+    // Change flags: states first, then pulses, in declaration order.
+    expect(source).toContain('CHG_COUNT_BIT     .equ 0');
+    expect(source).toContain('CHG_INCPRESSED_BIT .equ 1');
+    expect(source).toContain('CHG_DECPRESSED_BIT .equ 2');
 
-    // Count starts dirty, so DrawCount runs on the first frame.
-    expect(source).toContain('Dirty0:           .db %00000001');
+    // Count starts changed, so DrawCount runs on the first frame.
+    expect(source).toContain('Changed0:         .db %00000001');
 
     // Runtime loop calls only the phases that have effects.
     expect(source).toContain('call    __RunLogicEffects');
     expect(source).toContain('call    __RunRenderEffects');
     expect(source).not.toContain('__RunDeriveEffects');
 
-    // Fragment-local labels are namespaced per effect.
-    expect(source).toContain('FX_ApplyIncrement_done:');
-    expect(source).toContain('FX_ApplyDecrement_done:');
-    expect(source).toContain('jr nz,FX_ApplyDecrement_not_zero');
+    // Block-local labels are namespaced per effect.
+    expect(source).toContain('Glim_ApplyIncrement_done:');
+    expect(source).toContain('Glim_ApplyDecrement_done:');
+    expect(source).toContain('jr nz,Glim_ApplyDecrement_not_zero');
 
-    // writes Count marks the dirty bit after the user body.
-    expect(source).toContain('or      D_COUNT');
+    // updates Count marks the change flag after the user body.
+    expect(source).toContain('or      CHG_COUNT');
   });
 
-  it('rejects more than 8 dirty cells in v0', () => {
+  it('rejects more than 8 tracked cells in v0', () => {
     const decls = Array.from({ length: 9 }, (_, i) => `state S${i} : byte`).join('\n');
     const { program } = parseGlimmer(`program Big\n${decls}\n`);
     const { source, diagnostics } = generateAzm(program!);
     expect(source).toBe('');
-    expect(diagnostics[0]?.message).toContain('Dirty0 is full');
+    expect(diagnostics[0]?.message).toContain('Changed0 is full');
   });
 });
 
 describe('namespaceLocalLabels', () => {
-  it('rewrites only labels defined in the fragment', () => {
-    const body = ['    jr c,.done', '.done:', '    .db 1 ; directive, not a label'];
+  it('rewrites only labels defined in the block', () => {
+    const body = ['    jr c,_done', '_done:', '    .db 1 ; directive, not a label'];
     expect(namespaceLocalLabels(body, 'E')).toEqual([
-      '    jr c,FX_E_done',
-      'FX_E_done:',
+      '    jr c,Glim_E_done',
+      'Glim_E_done:',
       '    .db 1 ; directive, not a label',
     ]);
   });
@@ -93,13 +93,21 @@ describe('tec1g-mon3 matrix8x8 profile', () => {
     expect(diagnostics.map((d) => d.message).join('\n')).toContain('Unknown tec1g-mon3 key');
   });
 
-  it('generated Dot source assembles cleanly with AZM', async () => {
+  it('generated Dot source assembles and passes strict register contracts', async () => {
     const result = compileToAzm(dot);
     expect(result.diagnostics).toEqual([]);
+    expect(result.source).toContain('@Glim_DrawDot:');
+    expect(result.source).toContain(';! clobbers A,BC,DE,HL,IX,IY');
     const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-dot-'));
     const entry = path.join(dir, 'dot.asm');
     writeFileSync(entry, result.source!);
-    const assembled = await compile(entry, { emitBin: true, emitHex: false, emitD8m: false });
+    const assembled = await compile(entry, {
+      emitBin: true,
+      emitHex: false,
+      emitD8m: false,
+      registerContracts: 'strict',
+      registerContractsProfile: 'mon3',
+    });
     expect(assembled.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
     expect(assembled.artifacts.find((a) => a.kind === 'bin')).toBeDefined();
   });

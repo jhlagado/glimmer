@@ -11,7 +11,7 @@ nav_order: 1
 
 Glimmer is a preprocessor and project format for AZM. It compiles a
 structured program — state cells, pulses, input bindings, and effects whose
-bodies are plain Z80 fragments — into one generated AZM source
+bodies are plain Z80 blocks — into one generated AZM source
 file. The design rationale lives in the
 [Glimmer Interactive Runtime Specification](../glimmer.md).
 

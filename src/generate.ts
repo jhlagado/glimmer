@@ -2,8 +2,8 @@
  * AZM code generator.
  *
  * Turns a GlimmerProgram into a single generated AZM source file:
- * API equates, dirty-bit constants, state storage, the runtime loop,
- * binding polling, phase dispatch, wrapped user fragments and frame cleanup.
+ * API equates, change-flag constants, state storage, the runtime loop,
+ * binding polling, phase dispatch, wrapped user blocks and frame cleanup.
  *
  * The output follows the shape described in docs/glimmer.md section 10.3 and
  * uses canonical AZM style (lowercase dotted directives).
@@ -38,14 +38,14 @@ function bin8(value: number): string {
   return `%${value.toString(2).padStart(8, '0')}`;
 }
 
-function dirtyConst(cellName: string): string {
-  return `D_${cellName.toUpperCase()}`;
+function chgConst(cellName: string): string {
+  return `CHG_${cellName.toUpperCase()}`;
 }
 
 /**
- * Namespace fragment-local labels (".done") into ordinary globally unique
- * AZM labels ("FX_ApplyIncrement_done"). Only labels defined inside the
- * fragment are rewritten, so directives such as ".db" pass through untouched.
+ * Namespace block-local labels ("_done") into ordinary globally unique
+ * AZM labels ("Glim_ApplyIncrement_done"). Only labels defined inside the
+ * block are rewritten.
  *
  * "$" is not user-facing label syntax in AZM (it is the current-address
  * operator and hex-literal prefix), so generated labels use a plain
@@ -55,13 +55,15 @@ function dirtyConst(cellName: string): string {
 export function namespaceLocalLabels(body: string[], effectName: string): string[] {
   const localNames = new Set<string>();
   for (const line of body) {
-    const def = /^\s*\.([A-Za-z_][A-Za-z0-9_]*):/.exec(line);
+    const def = /^\s*_([A-Za-z][A-Za-z0-9_]*):/.exec(line);
     if (def) localNames.add(def[1] as string);
   }
   if (localNames.size === 0) return body;
   return body.map((line) =>
-    line.replace(/\.([A-Za-z_][A-Za-z0-9_]*)/g, (whole, name: string) =>
-      localNames.has(name) ? `FX_${effectName}_${name}` : whole,
+    line.replace(
+      /(^|[^A-Za-z0-9_])_([A-Za-z][A-Za-z0-9_]*)/g,
+      (whole, prefix: string, name: string) =>
+        localNames.has(name) ? `${prefix}Glim_${effectName}_${name}` : whole,
     ),
   );
 }
@@ -74,16 +76,16 @@ export function generateAzm(
   const org = options.org ?? DEFAULT_ORG;
   const apiBase = options.apiBase ?? DEFAULT_API_BASE;
 
-  // v0 uses a single dirty byte: states first, then pulses.
-  const dirtyCells = [...program.states.map((s) => s.name), ...program.pulses.map((p) => p.name)];
-  if (dirtyCells.length > 8) {
+  // v0 uses a single change-flag byte: states first, then pulses.
+  const trackedCells = [...program.states.map((s) => s.name), ...program.pulses.map((p) => p.name)];
+  if (trackedCells.length > 8) {
     diagnostics.push({
       line: 0,
-      message: `Dirty0 is full: ${dirtyCells.length} state/pulse cells declared, v0 supports at most 8.`,
+      message: `Changed0 is full: ${trackedCells.length} state/pulse cells declared, v0 supports at most 8.`,
     });
     return { source: '', diagnostics };
   }
-  const dirtyBit = new Map(dirtyCells.map((name, index) => [name, index]));
+  const chgBit = new Map(trackedCells.map((name, index) => [name, index]));
 
   const isTec1g = program.platform === 'tec1g-mon3';
 
@@ -154,12 +156,12 @@ export function generateAzm(
     }
   }
 
-  emit('; --- dirty bits ---');
-  for (const [name, bit] of dirtyBit) {
-    emit(`${`${dirtyConst(name)}_BIT`.padEnd(17)} .equ ${bit}`);
+  emit('; --- change flags ---');
+  for (const [name, bit] of chgBit) {
+    emit(`${`${chgConst(name)}_BIT`.padEnd(17)} .equ ${bit}`);
   }
-  for (const [name, bit] of dirtyBit) {
-    emit(`${dirtyConst(name).padEnd(17)} .equ ${bin8(1 << bit)}`);
+  for (const [name, bit] of chgBit) {
+    emit(`${chgConst(name).padEnd(17)} .equ ${bin8(1 << bit)}`);
   }
   emit();
 
@@ -169,8 +171,8 @@ export function generateAzm(
 
   emit('; --- effect dependency masks ---');
   for (const effect of program.effects) {
-    const mask = effect.depends.map(dirtyConst).join(' + ');
-    emit(`${`FXDEP_${effect.name}`.padEnd(17)} .equ ${mask}`);
+    const mask = effect.depends.map(chgConst).join(' + ');
+    emit(`${`GlimDep_${effect.name}`.padEnd(17)} .equ ${mask}`);
   }
   emit();
 
@@ -185,11 +187,11 @@ export function generateAzm(
   if (!isTec1g) {
     emit(`${'PrevKeys:'.padEnd(17)} .db 0`);
   }
-  const initialDirty = program.states
-    .filter((state) => state.dirtyOnStart)
-    .map((state) => 1 << (dirtyBit.get(state.name) as number))
+  const initialChanged = program.states
+    .filter((state) => state.changedOnStart)
+    .map((state) => 1 << (chgBit.get(state.name) as number))
     .reduce((acc, mask) => acc | mask, 0);
-  emit(`${'Dirty0:'.padEnd(17)} .db ${bin8(initialDirty)}`);
+  emit(`${'Changed0:'.padEnd(17)} .db ${bin8(initialChanged)}`);
   if (isTec1g) {
     emit(`${'Framebuffer:'.padEnd(17)} .ds 32           ; 8 rows x R,G,B,aux`);
   }
@@ -229,13 +231,14 @@ export function generateAzm(
     const effects = effectsByPhase.get(phase) ?? [];
     if (effects.length === 0) continue;
     emit(`; --- ${phase} phase dispatch ---`);
-    emit(`__Run${capitalize(phase)}Effects:`);
+    emit(';! clobbers A,BC,DE,HL,IX,IY');
+    emit(`@__Run${capitalize(phase)}Effects:`);
     for (const effect of effects) {
-      op('ld      a,(Dirty0)');
-      op(`and     FXDEP_${effect.name}`);
-      op(`jr      z,__Skip_${effect.name}`);
-      op(`call    FX_${effect.name}`);
-      emit(`__Skip_${effect.name}:`);
+      op('ld      a,(Changed0)');
+      op(`and     GlimDep_${effect.name}`);
+      op(`jr      z,GlimSkip_${effect.name}`);
+      op(`call    Glim_${effect.name}`);
+      emit(`GlimSkip_${effect.name}:`);
     }
     op('ret');
     emit();
@@ -246,12 +249,13 @@ export function generateAzm(
   }
 
   emit('; --- frame cleanup ---');
-  emit('__ClearFrameState:');
+  emit(';! clobbers A');
+  emit('@__ClearFrameState:');
   op('xor     a');
   for (const pulse of program.pulses) {
     op(`ld      (${pulse.name}),a`);
   }
-  op('ld      (Dirty0),a');
+  op('ld      (Changed0),a');
   op('ret');
 
   if (isTec1g) {
@@ -273,7 +277,8 @@ function emitTec1gPollBindings(
   op: (text: string) => void,
 ): void {
   emit('; --- input polling (MON-3 _scanKeys) ---');
-  emit('__PollBindings:');
+  emit(';! clobbers A,BC,DE');
+  emit('@__PollBindings:');
   if (program.bindings.length === 0) {
     op('ret');
     emit();
@@ -290,9 +295,9 @@ function emitTec1gPollBindings(
     op(`jr      nz,__NoPulse_${binding.target}_${binding.key}`);
     op('ld      a,1');
     op(`ld      (${binding.target}),a`);
-    op('ld      a,(Dirty0)');
-    op(`or      ${dirtyConst(binding.target)}`);
-    op('ld      (Dirty0),a');
+    op('ld      a,(Changed0)');
+    op(`or      ${chgConst(binding.target)}`);
+    op('ld      (Changed0),a');
     op('ret');
     emit(`__NoPulse_${binding.target}_${binding.key}:`);
   }
@@ -395,7 +400,8 @@ function emitPollBindings(
   op: (text: string) => void,
 ): void {
   emit('; --- input polling ---');
-  emit('__PollBindings:');
+  emit(';! clobbers A,BC,DE');
+  emit('@__PollBindings:');
   if (program.bindings.length === 0) {
     op('ret');
     emit();
@@ -417,9 +423,9 @@ function emitPollBindings(
     op(`jr      z,__NoPulse_${binding.target}`);
     op('ld      a,1');
     op(`ld      (${binding.target}),a`);
-    op('ld      a,(Dirty0)');
-    op(`or      ${dirtyConst(binding.target)}`);
-    op('ld      (Dirty0),a');
+    op('ld      a,(Changed0)');
+    op(`or      ${chgConst(binding.target)}`);
+    op('ld      (Changed0),a');
     emit(`__NoPulse_${binding.target}:`);
   }
   op('ret');
@@ -432,14 +438,15 @@ function emitEffectWrapper(
   op: (text: string) => void,
 ): void {
   emit(`; --- effect ${effect.name} (${effect.phase}) ---`);
-  emit(`FX_${effect.name}:`);
+  emit(';! clobbers A,BC,DE,HL,IX,IY');
+  emit(`@Glim_${effect.name}:`);
   for (const line of namespaceLocalLabels(effect.body, effect.name)) {
     emit(line);
   }
-  for (const target of effect.writes) {
-    op('ld      a,(Dirty0)');
-    op(`or      ${dirtyConst(target)}`);
-    op('ld      (Dirty0),a');
+  for (const target of effect.updates) {
+    op('ld      a,(Changed0)');
+    op(`or      ${chgConst(target)}`);
+    op('ld      (Changed0),a');
   }
   op('ret');
   emit();

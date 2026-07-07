@@ -23,7 +23,7 @@ state PlayerY  : byte = 88
 state TargetX  : byte = 40
 state TargetY  : byte = 40
 state Caught   : byte = 0
-state Score    : word = 0 dirty_on_start
+state Score    : word = 0 changed
 
 pulse StepUp
 pulse StepDown
@@ -63,48 +63,51 @@ sprite Target color lightred
 end
 
 tile Wall color darkblue on black
-  "XXXXXXXX" \ "X......X" \ "X......X" \ "X......X"
-  "X......X" \ "X......X" \ "X......X" \ "XXXXXXXX"
+  "XXXXXXXX"
+  "X......X"
+  "X......X"
+  "X......X"
+  "X......X"
+  "X......X"
+  "X......X"
+  "XXXXXXXX"
 end
 
 effect MovePlayer
     on StepUp, StepDown, StepLeft, StepRight
-    writes PlayerX, PlayerY
+    updates PlayerX, PlayerY
 begin
     ; clamp-and-step, one pixel per pulse
 end
 
 effect FleeTarget
     on Tick
-    writes TargetX, TargetY
+    updates TargetX, TargetY
 begin
     ; step away from player with _random jitter (MON-3 API, P8)
 end
 
 effect Collide
     on PlayerX, PlayerY, TargetX, TargetY
-    writes Caught, Score
+    updates Caught, Score
 begin
     ; overlap test; on catch: bump Score, respawn target via Random
 end
 
-effect PlacePlayer
-    phase render
+render PlacePlayer
     on PlayerX, PlayerY
 begin
     sprite_at Player, PlayerX, PlayerY   ; AZM op from the sprite resource;
                                          ; writes the shadow attr entry
 end
 
-effect PlaceTarget
-    phase render
+render PlaceTarget
     on TargetX, TargetY
 begin
     sprite_at Target, TargetX, TargetY
 end
 
-effect DrawScore
-    phase render
+render DrawScore
     on Score
 begin
     ; write score digits into the shadow name table top row;

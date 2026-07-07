@@ -36,12 +36,13 @@ key bindings, and three effects.
 
 Press key 1 to increment a counter, key 2 to decrement it, and the counter
 is redrawn whenever it changes — not because a handler was called, but
-because the `Count` cell became _dirty_ and the `DrawCount` effect depends
-on it. That reactive chain — input sets a pulse, a logic effect writes
+because the `Count` cell was marked _changed_ and the `DrawCount` effect
+depends on it. That reactive chain — input sets a pulse, a logic effect
+updates
 state, a render effect redraws what changed — is the whole programming
 model in miniature.
 
 Open the generated `counter.asm` and read it. Glimmer's promise is that
 the generated assembly is never hidden: every equate, dispatch routine,
-and wrapped fragment is ordinary AZM you can inspect, step through, and
+and wrapped block is ordinary AZM you can inspect, step through, and
 learn from.

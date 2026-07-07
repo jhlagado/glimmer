@@ -8,7 +8,7 @@ The first target is game writing for the TEC-1G. The format should also leave
 room for other Z80 systems as Debug80 expands its supported platforms.
 
 Longer term, Glimmer is expected to become a Debug80-facing format: a structured
-way to describe fragments, state records, bindings, effects, resources, and
+way to describe blocks, state records, bindings, effects, resources, and
 generated AZM glue for interactive Z80 programs.
 
 Documentation:
@@ -27,7 +27,7 @@ game-only.
 
 Early v0. The current vertical slice compiles a single-file `.glim`
 meta-source (program, state cells, pulses, key bindings, effects with Z80
-fragment bodies) into one generated AZM source file, which AZM assembles into
+block bodies) into one generated AZM source file, which AZM assembles into
 `.hex`, `.bin`, and a `.d8.json` Debug80 map. Two examples work end to end:
 
 - `examples/counter.glim` — CounterToy from the spec (generic profile)
@@ -49,9 +49,9 @@ node dist/src/cli.js examples/counter.glim   # writes examples/counter.asm
 npx azm examples/counter.asm                 # assembles hex/bin/d8 map
 ```
 
-The generated AZM is deliberately readable: API equates, dirty-bit constants,
+The generated AZM is readable: API equates, change-flag constants,
 state storage, the runtime loop, binding polling, phase dispatch, wrapped user
-fragments, and frame cleanup, in that order. Inspect
+blocks, and frame cleanup, in that order. Inspect
 `examples/counter.asm` after building to see the whole runtime.
 
 ## The Meta-Source Format (v0)
@@ -59,7 +59,7 @@ fragments, and frame cleanup, in that order. Inspect
 ```
 program CounterToy
 
-state Count : byte = 0 dirty_on_start
+state Count : byte = 0 changed
 
 pulse IncPressed
 
@@ -67,19 +67,23 @@ bind key KEY_1 rising -> IncPressed
 
 effect ApplyIncrement
     on IncPressed
-    writes Count
+    updates Count
 begin
-    ld hl,Count \ inc (hl)
-    ld a,(hl) \ cp 10 \ jr c,.done
-    xor a \ ld (hl),a
-.done:
+    ld hl,Count
+    inc (hl)
+    ld a,(hl)
+    cp 10
+    jr c,_done
+    xor a
+    ld (hl),a
+_done:
 end
 ```
 
-Fragment-local labels (`.done`) are namespaced per effect into ordinary
-globally unique labels in the generated output (`FX_ApplyIncrement_done`).
-Effects run when any of their `on` cells are dirty; `writes` cells are
-marked dirty after the effect runs.
+Block-local labels (`_done`) are namespaced per effect into ordinary
+globally unique labels in the generated output (`Glim_ApplyIncrement_done`).
+Effects run when any of their `on` cells changed; `updates` cells are
+marked changed after the effect runs.
 
 ## Development
 

@@ -14,13 +14,13 @@ from `.glim` meta-source to generated AZM, the diagnostics model, and the
 verification lanes that support the implementation.
 
 This manual is updated against the Glimmer codebase state through
-**2026-07-06**. Use it as the map when planning changes. Use the TypeScript
+**2026-07-07**. Use it as the map when planning changes. Use the TypeScript
 source and tests as the final authority when a detail has changed.
 
 Glimmer is deliberately small. The codebase is organised around one central
 path: parse `.glim` meta-source into a program model, validate references,
 and generate a single AZM source file containing the runtime glue and the
-user's Z80 fragments. Everything downstream — assembling, debug maps,
+user's Z80 blocks. Everything downstream — assembling, debug maps,
 emulation — belongs to AZM and Debug80.
 
 ---

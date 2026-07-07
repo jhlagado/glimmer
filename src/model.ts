@@ -14,7 +14,7 @@ export interface StateDecl {
   name: string;
   type: CellType;
   initial: number;
-  dirtyOnStart: boolean;
+  changedOnStart: boolean;
   line: number;
 }
 
@@ -46,10 +46,10 @@ export type EffectPhase = (typeof EFFECT_PHASES)[number];
 export interface EffectDecl {
   name: string;
   phase: EffectPhase;
-  /** State/pulse names whose dirty bits trigger this effect ("on" clauses). */
+  /** State/pulse names whose change flags trigger this effect ("on" clauses). */
   depends: string[];
-  /** State names marked dirty after this effect runs. */
-  writes: string[];
+  /** State names marked changed after this effect runs ("updates" clauses). */
+  updates: string[];
   /** Raw Z80 body lines, verbatim between begin/end. */
   body: string[];
   line: number;

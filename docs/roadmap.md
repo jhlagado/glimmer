@@ -58,11 +58,12 @@ P5 in v0.4, P3 in v0.5.
 
 A single-file `.glim` program compiles to one AZM file:
 
-- `program`, `state` (byte/word, initial value, `dirty_on_start`), `pulse`
+- `program`, `state` (byte/word, initial value, `changed`), `pulse`
 - `bind key <KEY> rising -> <Pulse>`
-- `effect` with `phase` (derive/logic/render), `on` triggers, `writes`, and a
-  verbatim Z80 body with fragment-local `.label` namespacing
-- one dirty byte (max 8 cells), generated polling/dispatch/cleanup glue
+- blocks — `compute` (derive), `effect` (logic), `render` — with `on`
+  triggers, `updates`, and a verbatim Z80 body with block-local `_label`
+  namespacing
+- one change-flag byte (max 8 cells), generated polling/dispatch/cleanup glue
 - placeholder `API_*` equates; CounterToy assembles end to end
 
 The compiler pipeline shape (parse → validate → generate, diagnostics with
@@ -129,28 +130,89 @@ debug80.json carries a `dot` target. Example: `examples/dot.glim` — the
 deliberately bare-bones input-to-pixel program (keypad-moved dot,
 edge-clamped). The generic profile remains the default.
 
+**Change-flag rollover (raised 2026-07-07; upgrade v0.2 candidate).**
+v0 clears all change flags at frame end, so a backward dependency —
+logic updating a cell that a derive effect (or an earlier-declared
+effect in the same phase) triggers on — is dropped, not deferred: the
+earlier effect never fires. Two-line reproduction: logic `updates
+Score`, `effect DifficultyCurve derive / on Score` — DifficultyCurve
+never runs. Fix is the spec's CurrentDirty/NextDirty split: cleanup
+rolls undispatched flags into the next frame instead of clearing them.
+With rollover, backward edges work with a one-frame delay, and cycles
+become bounded cross-frame feedback (one step per frame) rather than
+lost updates. Stability guarantees that hold either way: every effect
+runs at most once per frame; the frame is a single forward pass; frame
+cost is bounded by effect count — no within-frame circularity is
+possible by construction. Also: since `on`/`updates` declare the whole
+dataflow graph, potential cycles are statically detectable — add a
+compile-time cycle report (informational, not an error: cross-frame
+feedback is legitimate).
+
+**Lint backlog.** A plain (non-underscore) label defined inside a block
+passes through verbatim and is global — two blocks defining `Loop:`
+collide at assembly with an error pointing at generated code. Add a
+Glimmer diagnostic suggesting `_loop`. Likewise the planned
+"body updates a declared cell not listed in `updates`" warning.
+
 **v0.2 — Matrix runtime, second slice.** `held` bindings with repeat
-periods (`rising` stays edge-only); built-in frame counter and timer
-cells; per-tick sound + HUD service in the scan loop. Growth path for
-dot.glim: a trail-drawing mode, then snake — each addition should force
-exactly one new format feature.
+periods (`rising` stays edge-only); built-in frame counter; the timing
+widget family — `timer` (oscillator: fires and reloads), `timer ...
+once` (monostable gate), and `ramp` (P9's monostable progress counter:
+steps each frame, cell marked changed each step, completion pulse,
+retriggered by writing the cell); change-flag rollover (per-frame
+producers like ramps need deferral, not dropping); per-tick sound + HUD
+service in the scan loop. Growth path for dot.glim: a linear ramp slide
+(motion that is not one-keypress-one-step), then a trail-drawing mode,
+then snake — each addition should force exactly one new format
+feature.
 
 **v0.3 — Resources and scale.** Declarative resources compiled to data
-tables: shapes/sprites (row bitmaps + colour), tunes, LCD text/scripts.
-Multiple dirty bytes so programs can exceed 8 cells. Word-state dirty
-semantics. Target example: CounterToy on real hardware ports plus a
-sprite-mover with sound.
+tables: shapes/sprites (row bitmaps + colour), tunes, LCD text/scripts,
+and curves (P9): easing tables computed at build time in destination
+space, driven by v0.2's ramps — Tom-and-Jerry motion (ease-in/out,
+overshoot, anticipation) for the cost of one indexed load; envelopes as
+chained ramps or longer tables.
+Multiple change-flag bytes so programs can exceed 8 cells. Word-state
+change semantics. Target example: CounterToy on real hardware ports plus
+a sprite-mover with sound and an eased slide-into-place.
 
-**v0.4 — Project structure.** The spec's §7 model: fragments as separate
-records/files rather than one `.glim` blob; manifest; per-fragment
-assemble/check; dependency listing (writers/readers of each cell) as CLI
-output. Generated output moves to `.import` + `@` exports so fragment
-privacy is real rather than naming-convention-deep.
+**v0.4 — Project structure.** Multi-file programs with merge semantics,
+not textual inclusion: the entry file declares program/platform/display
+and names its parts (`part "input.glim"`), and every part contributes
+declarations to one program with one shared namespace — the compilation
+unit is the project, files are storage. Alongside `part`, a Glimmer
+`import "keyboard.asm"` statement brings an AZM module into the
+generated program: AZM's `.import` is name-wise order-independent
+(exports callable from any block, forward references resolve
+program-wide; `@` labels public, plain labels private to the unit;
+repeats idempotent) but emits the module's bytes at the import point —
+so Glimmer places the directive in a dedicated section of the generated
+file where bytes land safely, never inside a block's execution path.
+`.include` remains available verbatim inside bodies for data tables,
+where bytes at that exact spot are the intent. Also in this milestone:
+per-block assemble/check, dependency listing (writers/readers of each
+cell) as CLI output, and generated output moving to `.import` + `@`
+exports so block privacy is real rather than naming-convention-deep.
+Deferred beyond v0.4: `.glim` libraries (reusable pulse/effect/resource
+kits) — they need a namespace story that `part` deliberately avoids.
 
 **v0.5 — Game profile.** Hooks and phases shaped by Tetro/Pacmo: actor
 update, collision, mode/card dispatch (splash/running/paused/game-over as
 first-class screens). At this point rebuilding a recognizable slice of
 Tetro in Glimmer is the acceptance test.
+
+**Register contracts.** AZM formalizes register interfaces (`;!` in/
+out/clobbers/preserves on `@` routine boundaries) and proves callers
+against them — catching clobbered-loop-counter bugs at assemble time.
+Glimmer now leans on this: every generated routine is an `@` boundary
+with a generated contract, and output passes `--rc strict
+--reg-profile mon3` (test-enforced). Next steps: pass `;!` contracts on
+`routine` blocks through from `.glim` source (the Tetro sketch already
+writes them); run `--rc audit` inside `glimmer build` and map
+diagnostics to `.glim` lines via label-anchored mapping; let profiles
+ship `.asmi` interfaces for monitor APIs. The payoff for Glimmer users:
+blocks call library and monitor routines constantly, and contracts turn
+register collisions — the classic Z80 bug — into build-time errors.
 
 **Later.** `glimmer build` convenience (invoke AZM's compile API);
 glim-level debug maps for Debug80 stepping; TMS9918 profile; editor/browser
@@ -183,7 +245,7 @@ code:
   rotating attribute-table emission order each frame
 
 Two Glimmer-shaped observations. First, the name table is a 32x24 grid of
-tiles — the same 32x24 the spec uses to motivate one-screen fragments;
+tiles — the same 32x24 the spec uses to motivate one-screen blocks;
 dirty-region display updates map naturally onto name-table cell writes, so
 the commit phase can flush only dirty cells. Second, the matrix profile
 (v0.2) and the TMS9918 profile differ almost entirely in the generated
@@ -220,7 +282,7 @@ it needs address segments attributed to `counter.glim` lines instead of
   compiles `.glim` → `.asm`, invokes AZM's programmatic compile API, then
   rewrites the resulting map: Glimmer knows exactly which generated asm
   lines came from which `.glim` lines (it wrote them), so segments inside
-  user fragments are re-attributed to the `.glim` file, while generated
+  user blocks are re-attributed to the `.glim` file, while generated
   glue stays attributed to the `.asm`. No changes to AZM or Debug80's map
   reader; stepping lands in `.glim` for user code and drops into readable
   generated AZM for glue — which is the transparency principle working
@@ -235,6 +297,19 @@ it needs address segments attributed to `counter.glim` lines instead of
 - **Option C — sidecar map composed by Debug80.** A separate
   `.glim.map.json` that Debug80 merges at load time. Most moving parts,
   least aligned with the existing architecture; not recommended.
+- **Option D — label-anchored mapping (no new artifacts).** The generated
+  naming convention is itself debug information. Every effect's code
+  begins at `Glim_<Effect>:`, the `.d8.json` map records symbols with
+  addresses, and block bodies are copied into the generated file
+  verbatim, line for line (local-label renaming changes text, never line
+  count). So a tool holding the `.glim`, the generated `.asm`, and the
+  `.d8.json` can reconstruct the full mapping with zero extra metadata:
+  the symbol gives the block's start, and body line k after the label
+  corresponds to body line k after `begin`. Block-level mapping
+  ("which effect is the PC in?") needs only the `.d8.json` and the
+  convention. This depends on two promises the generator now makes —
+  stable `Glim_*` naming and verbatim, line-preserving bodies — which
+  should be treated as a contract once anything relies on them.
 
 The build-orchestration question ("how does Debug80 know to run Glimmer?")
 starts simple: a debug80.json target's `sourceFile` points at the

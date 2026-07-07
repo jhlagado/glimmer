@@ -20,8 +20,8 @@ that is a numbered format proposal, catalogued below and folded into the
   `display matrix8x8` / `display tms9918 mode graphics1` select the
   profile: real port/API equates, the loop skeleton (scan-driven vs
   vblank-paced), and the profile library (framebuffer or VRAM helpers).
-- **P2 — Array state.** `state BoardRows : byte[8]`. Dirty tracking stays
-  per-cell (the whole array is one dirty bit); Tetro treats the board as
+- **P2 — Array state.** `state BoardRows : byte[8]`. Change tracking stays
+  per-cell (the whole array is one change flag); Tetro treats the board as
   one unit already.
 - **P3 — Cards.** `card Splash / Playing / GameOver` as first-class
   modes (HyperCard sense: screens; exactly one active). A `card` line
@@ -30,7 +30,7 @@ that is a numbered format proposal, catalogued below and folded into the
   the language stays nesting-free. A built-in `CurrentCard` state cell
   plus a generated `Card` enum; effects in a card's section only
   dispatch while it is active; `enter` effects run once on card entry
-  (triggered by `CurrentCard` becoming dirty). This replaces Tetro's
+  (triggered by `CurrentCard` changing). This replaces Tetro's
   hand-rolled flag dispatch (`GameOver`/`SplashTimer`/`Paused` checks at
   the top of LogicTick).
 - **P4 — Held bindings and timers.** `bind key ... held period N ->`
@@ -38,10 +38,11 @@ that is a numbered format proposal, catalogued below and folded into the
   `timer Gravity = 32 -> GravityFire` declares a per-frame countdown
   cell that fires a pulse and reloads; the cell is writable state, so
   difficulty curves (gravity speeding up at 2000 points) are ordinary
-  `writes`.
-- **P5 — Routines.** `routine <Name>` cards: callable helper fragments
-  (collision checks, geometry) that are not effects — no depends, no
-  dispatch, just a named, contract-carrying routine many effects call.
+  `updates`.
+- **P5 — Routines.** `routine <Name>` declarations: callable helper
+  blocks (collision checks, geometry) that are not effects — no
+  triggers, no dispatch, just a named, contract-carrying routine many
+  effects call.
 - **P6 — Resources.** Declarative data compiled to `.db` tables:
   `shape` (pixel-art rows with a colour), `sound` (duration + divider,
   generating a trigger routine), `text` (LCD strings). Pixel rows are
@@ -53,8 +54,24 @@ that is a numbered format proposal, catalogued below and folded into the
   bodies invoke them as ordinary AZM. Glimmer adds no macro system of
   its own.
 - **P7 — Word semantics.** 16-bit compares in ordinary effect code
-  (score thresholds) and word cells in `writes`. Already half-present in
-  v0 (word storage), needs dirty semantics defined.
+  (score thresholds) and word cells in `updates`. Already half-present in
+  v0 (word storage), needs change-flag semantics defined.
+- **P9 — Curves and ramps (easing).** Three orthogonal pieces composing
+  through the reactive graph. `curve SlideIn ease_out steps 16 from 0
+to 7`: the compiler does the floating-point easing at build time and
+  emits a ROM table precomputed in destination space (actual pixel
+  positions) — runtime cost is one indexed load (three instructions
+  with a page-aligned table via `.align`). Presets: linear, ease_in,
+  ease_out, ease_in_out, sine, overshoot, anticipation; explicit value
+  lists also allowed. `ramp Slide : byte steps 16 -> SlideDone`: a
+  monostable progress counter that steps each frame, marks its cell
+  changed each step, then stops and fires its pulse — retriggered by
+  an ordinary write to its cell (no new trigger syntax). A derive
+  effect maps ramp through curve into position. Envelopes are chained
+  ramps (completion pulse starts the next) or one longer table.
+  Platform precedent: the TMS9918 demo's precomputed sub-pixel phase
+  banks and Tetro's rotation tables. Depends on change-flag rollover
+  (per-frame producers need deferral, not dropping).
 - **P8 — Profile services.** Sound service, HUD scan, RNG, and (matrix)
   the frame scanner are profile library routines the generated loop
   calls — not user code, not generated glue. The sketches call them by
@@ -68,7 +85,7 @@ that is a numbered format proposal, catalogued below and folded into the
   `Snd_Rotate`) must exist in the generated file as a visible AZM `op`
   or routine that Glimmer emitted from a declaration. One macro system,
   owned by AZM.
-- Fragment bodies are real Z80 (AZM), unchanged in spirit from the
+- Block bodies are real Z80 (AZM), unchanged in spirit from the
   corpus code they adapt.
 - The runtime owns the loop; nothing in a sketch writes `MainLoop`.
 - Everything declarative compiles to inspectable AZM — no construct is

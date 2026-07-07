@@ -27,47 +27,54 @@ The CLI (`src/cli.ts`) wraps `compileToAzm`, prints diagnostics as
 consumes:
 
 - `StateDecl` — named byte/word cell with initial value and
-  `dirtyOnStart`
+  `changedOnStart`
 - `PulseDecl` — one-frame transient cell, cleared by frame cleanup
 - `KeyBinding` — `bind key <KEY> rising -> <Pulse>` (the only binding
   kind in v0)
 - `EffectDecl` — name, phase (`derive` | `logic` | `render`), `on`
-  trigger cells (stored as `depends`), `writes` cells, and a verbatim
+  trigger cells (stored as `depends`), `updates` cells, and a verbatim
   Z80 body captured between `begin` and `end`
 - `GlimmerDiagnostic` — `{ line, message }`, line 0 for file-level issues
 
 ## Parsing
 
 `parseGlimmer` is line-oriented. Comments start with `;` outside bodies;
-effect bodies are kept verbatim. Effect headers accumulate `phase`,
-`on`, and `writes` until a line reading `begin` opens the body, which
-runs until a line containing only `end`.
+block bodies are kept verbatim. Blocks declare as `compute` / `effect` /
+`render` — the keyword is the phase (derive/logic/render) and enforces
+kind constraints (`render` takes no `updates`; `compute` requires it).
+Header lines accumulate `on` and `updates` until a line reading `begin`
+opens the body, which runs until a line containing only `end`.
 
 After the statement pass, `validateReferences` checks duplicate cell and
 effect names, binding targets (must be declared pulses), `on` triggers (any
-declared cell), and `writes` (declared states only). Parsing returns a
+declared cell), and `updates` (declared states only). Parsing returns a
 program only when there are no diagnostics.
 
 ## Generation
 
 `generateAzm` emits one AZM file in a fixed order: header, `.org`,
-placeholder API equates, key-bit equates, dirty-bit constants, per-effect
+placeholder API equates, key-bit equates, change-flag constants, per-effect
 dependency masks, state storage, the runtime loop, `__PollBindings`,
-per-phase dispatch routines, wrapped user fragments, and
+per-phase dispatch routines, wrapped user blocks, and
 `__ClearFrameState`.
 
 Notable constraints the generator honours:
 
-- **One dirty byte in v0.** States then pulses, declaration order, at most
+- **One change-flag byte in v0.** States then pulses, declaration order, at most
   8 cells; exceeding it is a diagnostic, not a truncation.
-- **Fragment-local labels.** `.done` style labels are rewritten to
-  globally unique labels (`FX_ApplyIncrement_done`) by
+- **Block-local labels.** `_done` style labels are rewritten to
+  globally unique labels (`Glim_ApplyIncrement_done`) by
   `namespaceLocalLabels`, which only rewrites names actually defined in
-  the fragment — directives such as `.db` pass through. `$` is never used
-  in generated names: it is AZM's current-address operator and hex prefix,
-  not label syntax.
-- **Fall-through bodies.** Fragment bodies must not `ret`; the generated
-  wrapper appends `writes` dirty-marking and the final `ret`.
+  the block. `$` is never used in generated names: it is AZM's
+  current-address operator and hex prefix, not label syntax.
+- **Fall-through bodies.** Block bodies must not `ret`; the generated
+  wrapper appends `updates` change-marking and the final `ret`.
+- **Register-contract boundaries.** Every generated routine — effect
+  wrappers (`@Glim_<Effect>:`), pollers, dispatchers, cleanup — is an
+  `@` entry carrying a generated `;!` contract, so the whole output is
+  analyzable by AZM register contracts. Generated output passes
+  `--rc strict --reg-profile mon3`; the Dot round-trip test enforces
+  this.
 
 ## Profiles
 

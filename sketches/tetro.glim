@@ -24,7 +24,7 @@ state CurPieceIndex  : byte = 0
 state CurRotation    : byte = 0
 state CurPieceColor  : byte = 0
 state NextPieceIndex : byte = 0
-state Score          : word = 0 dirty_on_start      ; P7
+state Score          : word = 0 changed      ; P7
 state LinesCleared   : byte = 0
 state ClearMask      : byte = 0                     ; rows being flashed
 state BoardRows      : byte[8]                      ; P2: occupancy bitmap
@@ -51,7 +51,7 @@ pulse AnyKey
 ; ----------------------------------------------------------------------
 ; Timers — P4. Each is a per-frame countdown cell that fires its pulse
 ; and reloads. Writable like any state: the difficulty curve below
-; simply writes Gravity.
+; simply updates Gravity.
 ; Replaces: GravityCooldown/CurGravPeriod, ClearTimer, GOverKeyGate.
 ; ----------------------------------------------------------------------
 
@@ -109,7 +109,7 @@ text MsgPress   "PRESS ANY KEY"
 ; ----------------------------------------------------------------------
 ; Routines — P5. Shared helpers called from many effects; bodies as in
 ; corpus/tetro/src/tetro/{collision,geometry-helpers}.asm. Not effects:
-; no depends, no dispatch, just named contract-carrying fragments.
+; no depends, no dispatch, just named contract-carrying blocks.
 ; ----------------------------------------------------------------------
 
 routine CheckCollision
@@ -133,13 +133,12 @@ end
 ; A card is a SECTION, not a block: `card Playing` starts it, and it
 ; runs until the next `card` line or end of file. No closing keyword.
 ; A built-in CurrentCard cell and a generated Card enum exist; a card
-; switch is an ordinary write:  ld a,Card.Playing \ ld (CurrentCard),a
+; switch is an ordinary write: load Card.Playing into CurrentCard
 ; ----------------------------------------------------------------------
 
 card Splash
 
-  effect SplashTwinkle
-      phase render
+  render SplashTwinkle
       on FrameCount               ; built-in per-frame counter
   begin
       ; PRNG-driven pixel twinkle, body as corpus SplashState
@@ -149,51 +148,55 @@ card Splash
       on AnyKey
   begin
       call InitGame                    ; routine: reset state, seed RNG
-      ld a,Card.Playing \ ld (CurrentCard),a
+      ld a,Card.Playing
+      ld (CurrentCard),a
   end
 
 card Playing
 
   effect ApplyMove
       on MoveLeft, MoveRight
-      writes PlayerX
+      updates PlayerX
   begin
       ; compute PendingX from pulses, CheckCollision, commit or refuse
   end
 
   effect ApplyRotate
       on RotateCw, RotateCcw
-      writes CurRotation
+      updates CurRotation
   begin
-      call CheckCollision \ jr c,.blocked
+      call CheckCollision
+      jr c,_blocked
       call Snd_Rotate                  ; P6/P8 generated trigger
-.blocked:
+_blocked:
   end
 
   effect ApplyGravity
       on GravityFire, SoftDrop
-      writes PlayerY, BoardRows, ClearMask
+      updates PlayerY, BoardRows, ClearMask
   begin
       ; descend or lock: CheckCollision below; on lock LockPiece,
       ; Snd_Lock, detect full rows into ClearMask,
-      ; spawn next piece or:  ld a,Card.GameOver \ ld (CurrentCard),a
+      ; spawn next piece or switch to Card.GameOver
   end
 
-  effect DifficultyCurve
-      phase derive
+  compute DifficultyCurve
       on Score
-      writes Gravity                   ; P4: timers are writable state
+      updates Gravity                   ; P4: timers are writable state
   begin
       ld hl,(Score)                    ; P7: word compare
       ld de,2000
-      or a \ sbc hl,de \ jr c,.keep
-      ld a,28 \ ld (Gravity),a         ; GravPeriodStep1
-.keep:
+      or a
+      sbc hl,de
+      jr c,_keep
+      ld a,28
+      ld (Gravity),a         ; GravPeriodStep1
+_keep:
   end
 
   effect ScoreRows
       on ClearMask
-      writes Score, LinesCleared
+      updates Score, LinesCleared
   begin
       ; count rows in ClearMask, add 100/300/500/800, Snd_Clear
   end
@@ -201,11 +204,11 @@ card Playing
   effect Pause
       on TogglePause
   begin
-      ld a,Card.Paused \ ld (CurrentCard),a
+      ld a,Card.Paused
+      ld (CurrentCard),a
   end
 
-  effect DrawBoard
-      phase render
+  render DrawBoard
       on BoardRows, PlayerX, PlayerY, CurRotation, ClearMask
   begin
       ; rebuild back buffer: board planes, flash ClearMask rows white,
@@ -213,8 +216,7 @@ card Playing
       ; framebuffer routines FbClearAll/FbSetCell/FbOrRow (P8)
   end
 
-  effect DrawScore
-      phase render
+  render DrawScore
       on Score
   begin
       ld hl,(Score)
@@ -227,11 +229,12 @@ card Paused
   ; `op` whose definition Glimmer emits into the generated file's
   ; library section (see sketches/README.md, P6/P8). It expands inline:
   ;     op lcd_row(msg imm16, row imm8)
-  ;         ld b,row \ call LcdCmd
-  ;         ld hl,msg \ call LcdString
+  ;         ld b,row
+  ;         call LcdCmd
+  ;         ld hl,msg
+  ;         call LcdString
   ;     end
-  enter effect ShowPaused
-      phase render
+  enter render ShowPaused
   begin
       lcd_row MsgPaused, LcdRow1
   end
@@ -240,13 +243,13 @@ card Paused
       on AnyKey
   begin
       lcd_row MsgRunning, LcdRow1
-      ld a,Card.Playing \ ld (CurrentCard),a
+      ld a,Card.Playing
+      ld (CurrentCard),a
   end
 
 card GameOver
 
-  enter effect ShowOver
-      phase render
+  enter render ShowOver
   begin
       lcd_row MsgOver, LcdRow1
       call Snd_Over
@@ -264,5 +267,6 @@ card GameOver
       on AnyKey
       after GateOpen                   ; open question: gating pulse order
   begin
-      ld a,Card.Splash \ ld (CurrentCard),a
+      ld a,Card.Splash
+      ld (CurrentCard),a
   end

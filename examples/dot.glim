@@ -14,7 +14,7 @@ platform tec1g-mon3
 display matrix8x8
 
 state DotX : byte = 3
-state DotY : byte = 3 dirty_on_start   ; dirty so the dot draws on frame 1
+state DotY : byte = 3 changed   ; changed so the dot draws on frame 1
 
 pulse Up
 pulse Down
@@ -28,47 +28,60 @@ bind key KEY_6 rising -> Right
 
 effect MoveUp
     on Up
-    writes DotY
+    updates DotY
 begin
-    ld a,(DotY) \ or a \ jr z,.stop    ; at the top: stop, go no further
-    dec a \ ld (DotY),a
-.stop:
+    ld a,(DotY)
+    or a
+    jr z,_stop    ; at the top: stop, go no further
+    dec a
+    ld (DotY),a
+_stop:
 end
 
 effect MoveDown
     on Down
-    writes DotY
+    updates DotY
 begin
-    ld a,(DotY) \ cp 7 \ jr nc,.stop
-    inc a \ ld (DotY),a
-.stop:
+    ld a,(DotY)
+    cp 7
+    jr nc,_stop
+    inc a
+    ld (DotY),a
+_stop:
 end
 
 effect MoveLeft
     on Left
-    writes DotX
+    updates DotX
 begin
-    ld a,(DotX) \ or a \ jr z,.stop
-    dec a \ ld (DotX),a
-.stop:
+    ld a,(DotX)
+    or a
+    jr z,_stop
+    dec a
+    ld (DotX),a
+_stop:
 end
 
 effect MoveRight
     on Right
-    writes DotX
+    updates DotX
 begin
-    ld a,(DotX) \ cp 7 \ jr nc,.stop
-    inc a \ ld (DotX),a
-.stop:
+    ld a,(DotX)
+    cp 7
+    jr nc,_stop
+    inc a
+    ld (DotX),a
+_stop:
 end
 
-effect DrawDot
-    phase render
+render DrawDot
     on DotX, DotY
 begin
     call FbClear
-    ld a,(DotX) \ ld b,a
-    ld a,(DotY) \ ld c,a
+    ld a,(DotX)
+    ld b,a
+    ld a,(DotY)
+    ld c,a
     ld a,COLOR_WHITE
     call FbPlot
 end

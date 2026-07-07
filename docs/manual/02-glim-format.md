@@ -39,7 +39,7 @@ MON-3 key codes (`KEY_0`..`KEY_F`, `KEY_PLUS`, `KEY_MINUS`, `KEY_GO`,
 `KEY_AD`), and the generated loop is scan-driven — every frame the runtime
 scans the whole 8x8 RGB matrix from a framebuffer with fixed row dwell,
 then runs your effects while the matrix is blank. The generated file also
-contains a small profile library your fragments can call: `FbClear`,
+contains a small profile library your blocks can call: `FbClear`,
 `FbPlot` (B = x, C = y, A = colour bits), and `MxMask`.
 
 See `examples/dot.glim` for the complete minimal program: a white dot
@@ -48,14 +48,14 @@ moved with keys 2/4/6/8, stopping at every edge.
 ## state
 
 ```
-state Count : byte = 0 dirty_on_start
+state Count : byte = 0 changed
 state Score : word = 0
 ```
 
 Declares a state cell managed by the runtime. Types are `byte` and `word`.
-The initial value is optional and defaults to 0. `dirty_on_start` marks
-the cell dirty on the first frame so dependent effects run once at
-startup.
+The initial value is optional and defaults to 0. The `changed` modifier marks the cell
+as already changed at startup so dependent effects run on the first
+frame.
 
 ## pulse
 
@@ -76,52 +76,58 @@ Declares an input binding. In the current version the only form is a
 rising-edge key binding onto a pulse: the pulse fires on the frame the key
 is first pressed, not while it is held.
 
-## effect
+## compute, effect, render
 
 ```
 effect ApplyIncrement
     on IncPressed
-    writes Count
+    updates Count
 begin
-    ld hl,Count \ inc (hl)
-    ld a,(hl) \ cp 10 \ jr c,.done
-    xor a \ ld (hl),a
-.done:
+    ld hl,Count
+    inc (hl)
+    ld a,(hl)
+    cp 10
+    jr c,_done
+    xor a
+    ld (hl),a
+_done:
 end
 ```
 
-An effect is a named Z80 fragment. Its three header lines answer three
-different questions:
+A block is a named piece of Z80 with a declared reason to run. Its
+declaration answers three different questions:
 
-- `phase` — **when** in the frame it runs. Every frame executes the
-  phases in a fixed order: `derive`, then `logic`, then `render`. State
-  changes settle before anything draws. **Logic is the default** — an
-  effect with no `phase` line is ordinary game logic (like
-  `ApplyIncrement` above); only `derive` and `render` need stating.
+- The **keyword** — **when** in the frame it runs. Every frame executes
+  the phases in a fixed order: `compute` blocks first (state computed
+  from other state), then `effect` blocks (ordinary game logic, like
+  `ApplyIncrement` above), then `render` blocks (state drawn to the
+  display). The keyword also enforces the block's nature: `render`
+  takes no `updates` clause, and `compute` requires one.
 - `on` — **why** it runs. This is the trigger: the effect runs when any
-  listed cell became dirty this frame. This is the one line that cannot
+  listed cell changed this frame. This is the one line that cannot
   be inferred — notice the body above never mentions `IncPressed` at
   all. The connection between the pulse and the code exists only here.
-- `writes` — **what** it changes. After the effect runs, each listed
-  state cell is marked dirty, which is what triggers downstream effects
+- `updates` — **what** it changes. After the effect runs, each listed
+  state cell is marked changed, which is what triggers downstream effects
   (here, a render effect `on Count`). It is the effect's outward
   contract: a reader can trace the program's dataflow from `on` and
-  `writes` lines alone, without reading any Z80.
+  `updates` lines alone, without reading any Z80.
 
-`on` and `writes` are always explicit — why an effect runs and what it
+`on` and `updates` are always explicit — why an effect runs and what it
 changes are never implied. The body between `begin` and `end` is real
-AZM assembly, including backslash instruction stacking.
+AZM assembly. AZM can stack instructions on one line, but Glimmer examples
+prefer one instruction per line because it is easier to read and teach.
 
-Labels starting with `.` are local to the fragment. Glimmer rewrites them
-into globally unique labels in the generated output, so every fragment can
-have its own `.done`.
+Labels using a single leading underscore are local to the block. Glimmer
+rewrites them into globally unique labels in the generated output, so every
+block can have its own `_done`.
 
-Fragment bodies fall through — do not end them with `ret`. The generated
-wrapper appends the dirty-bit bookkeeping and the `ret`.
+Block bodies fall through — do not end them with `ret`. The generated
+wrapper appends the change-flag bookkeeping and the `ret`.
 
 ## Current limits
 
 This is an early alpha. The present version supports at most 8 state and
-pulse cells per program (one dirty byte), one binding kind, and
+pulse cells per program (one change-flag byte), one binding kind, and
 placeholder system API addresses. See the
 [roadmap](../roadmap.md) for what comes next.

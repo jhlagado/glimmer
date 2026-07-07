@@ -42,26 +42,36 @@ A reading test for the whole language: every declaration should read
 aloud as an English sentence.
 
 ```
-state DotY : byte = 3 dirty_on_start
-;  "DotY is a byte, starting at 3, dirty on start."
+state DotY : byte = 3 changed
+;  "DotY is a byte, starting at 3, changed."
 
 bind key KEY_2 rising -> Up
 ;  "Binding: key 2, on a new press, fires Up."
 
 effect MoveUp
     on Up
-    writes DotY
-;  "Effect MoveUp, in the logic phase, on Up, writes DotY."
+    updates DotY
+;  "Effect MoveUp, on Up, updates DotY."
+
+render DrawDot
+    on DotX, DotY
+;  "Render DrawDot: on DotX and DotY."
+
+compute DifficultyCurve
+    on Score
+    updates Gravity
+;  "Compute DifficultyCurve: on Score, updates Gravity."
 ```
 
-The effect header answers three questions, one per line: `phase` is
-**when** in the frame it runs, `on` is **why** it runs (the trigger —
+A block declaration answers three questions: the **keyword** is
+**when** in the frame it runs (`compute` blocks first, then `effect`
+blocks, then `render` blocks), `on` is **why** it runs (the trigger —
 the one line that cannot be inferred, because the body never mentions
-it), and `writes` is **what** it changes (the outward contract that
-propagates dirtiness to later effects). `phase` defaults to `logic` —
-ordinary game logic is what an effect is unless it says otherwise; only
-`derive` and `render` need stating. `on` and `writes` are always
-explicit.
+it), and `updates` is **what** it changes (the outward contract that
+propagates change flags to later blocks). Each keyword carries its
+constraints: a `render` block takes no `updates` (it depicts state); a
+`compute` block requires `updates` (computing state is its purpose).
+`on` and `updates` are always explicit.
 
 ## Implemented grammar (v0)
 
@@ -75,14 +85,14 @@ statement       ::= program-decl
                   | state-decl
                   | pulse-decl
                   | bind-decl
-                  | effect-decl
+                  | block-decl
 
 program-decl    ::= "program" identifier
 platform-decl   ::= "platform" platform-name        ; "tec1g-mon3"
 display-decl    ::= "display" display-name          ; "matrix8x8"
 
 state-decl      ::= "state" identifier ":" cell-type
-                    ( "=" number )? ( "dirty_on_start" )?
+                    ( "=" number )? ( "changed" )?
 cell-type       ::= "byte" | "word"
 
 pulse-decl      ::= "pulse" identifier
@@ -90,15 +100,16 @@ pulse-decl      ::= "pulse" identifier
 bind-decl       ::= "bind" "key" key-name "rising" "->" identifier
 key-name        ::= identifier                      ; validated per platform
 
-effect-decl     ::= "effect" identifier
-                    effect-header*
+block-decl      ::= block-kind identifier
+                    block-header*
                     "begin" newline
                     azm-line*
                     "end"
-effect-header   ::= "phase" phase-name              ; default: logic
-                  | "on" name-list
-                  | "writes" name-list
-phase-name      ::= "derive" | "logic" | "render"
+block-kind      ::= "compute" | "effect" | "render"
+                  ; the keyword is the phase: compute=derive,
+                  ; effect=logic, render=render
+block-header    ::= "on" name-list
+                  | "updates" name-list             ; not on render
 name-list       ::= identifier ( "," identifier )*
 
 identifier      ::= [A-Za-z_][A-Za-z0-9_]*
@@ -109,20 +120,27 @@ Semantic constraints enforced after parsing:
 
 - exactly one `program`; `platform` and `display` at most once, and only
   together
-- state/pulse names share one namespace and must be unique
+- all declared names — states, pulses, effects — share one namespace and
+  must be unique (every name projects into one flat AZM symbol space)
+- names may not collide with generated or profile symbols: the `Glim`,
+  `CHG_`, and `__` prefixes and the runtime/profile names (`Changed0`,
+  `MainLoop`, `Framebuffer`, the library routines) are reserved, so the
+  diagnostic lands on the `.glim` line; AZM's global-uniqueness check
+  remains the backstop
 - `bind` targets must be declared pulses
-- `on` names must be declared cells; `writes` names must be states
-- an effect needs at least one `on` trigger; `phase` defaults to `logic`
+- `on` names must be declared cells; `updates` names must be states
+- every block needs at least one `on` trigger
+- `render` blocks take no `updates`; `compute` blocks require `updates`
 - `end` terminates a body when it is the only word on the line
 
 ## The dataflow, in one paragraph
 
-`bind` turns an input event into a pulse. A pulse or a written state
-becoming dirty is what makes effects run: an effect runs in its phase
-when any `on` cell is dirty, and after it runs its `writes` cells are
-marked dirty, which can make later-phase effects run in the same frame.
-Pulses and dirty bits clear at the end of every frame. That is the whole
-model; `->` is its only symbol.
+`bind` turns an input event into a pulse. A cell being marked changed is
+what makes effects run: an effect runs in its phase when any `on` cell
+changed, and after it runs its `updates` cells are marked changed, which
+can make later-phase effects run in the same frame. Pulses and change
+flags clear at the end of every frame. That is the whole model; `->` is
+its only symbol.
 
 ## Proposed grammar (sketches — not implemented)
 
@@ -139,14 +157,38 @@ timer-decl      ::= "timer" identifier ":" cell-type "=" number
                   ; "Gravity is a byte, starting at 32, fires
                   ;  GravityFire (once)."
 
+curve-decl      ::= "curve" identifier preset "steps" number
+                    ( "from" number "to" number )?
+                  ; table computed at build time; presets: linear,
+                  ; ease_in, ease_out, ease_in_out, sine, overshoot,
+                  ; anticipation. Explicit value-list form also planned.
+preset          ::= identifier
+
+ramp-decl       ::= "ramp" identifier ":" cell-type "steps" number
+                    "->" identifier
+                  ; monostable progress counter: steps each frame,
+                  ; marks its cell changed each step, fires the pulse
+                  ; on completion; retriggered by writing the cell.
+
 routine-decl    ::= "routine" identifier
                     contract-comment?
                     "begin" newline azm-line* "end"
 
+part-decl       ::= "part" string
+                  ; merge semantics, not inclusion: the named file's
+                  ; declarations join the same program and namespace.
+                  ; Only the entry file declares program/platform/display.
+
+import-decl     ::= "import" string
+                  ; brings an AZM module (.asm with @ exports) into the
+                  ; generated program. Emitted in a dedicated section:
+                  ; AZM import names are order-independent, but bytes
+                  ; land at the directive, so it never sits in a block.
+
 card-decl       ::= "card" identifier
-                  ; a section header, not a block: the card contains
-                  ; every following declaration until the next card-decl
-                  ; or end of file. No closing keyword.
+                  ; a section header with no closing keyword: the card
+                  ; contains every following declaration until the next
+                  ; card-decl or end of file.
 enter-effect    ::= "enter" effect-decl
 
 shape-decl      ::= "shape" identifier "color" color-name
@@ -164,22 +206,38 @@ tile-decl       ::= "tile" identifier "color" color-name
 - **"Card" means a screen/mode, HyperCard-sense — only that.** A card is
   a mode the running program is in (Splash, Playing, GameOver); exactly
   one is active, tracked by the built-in `CurrentCard` state cell. The
-  unit of code is a **fragment** (informally, a snippet) — never a
+  unit of code is a **block** (informally, a snippet) — never a
   "routine card". One word, one meaning, like the symbols.
 
-- **`phase logic` is the default** (revised 2026-07-06; an earlier
-  decision made phase mandatory). Logic is what an effect is unless it
-  says otherwise; only `derive` and `render` need stating. Writing
-  `phase logic` explicitly remains legal.
-- **`on` replaced `depends`.** Shorter, reads aloud naturally, still
-  pairs with `writes`.
+- **The block keyword is the phase (2026-07-07):** `compute X`
+  (derive), `effect Y` (logic), `render Z`. The first word carries both
+  what a declaration is and when it runs, and each keyword enforces its
+  constraints (render cannot update; compute must). "Block" is the
+  umbrella term in prose. Lineage acknowledged: this is Vue's shape —
+  state=data, compute=computed, effect=watch, render=template. This
+  replaced phase modifiers on the effect line, which had replaced the
+  `phase` header line.
+- **`on` replaced `depends`.** Shorter, reads aloud naturally.
 - **Bindings target pulses only.** No direct-bind-to-effect shortcut:
   `->` always fires a pulse, preserving its single meaning. Minimal
   programs pay a little pulse plumbing; the model stays uniform.
-- **`writes` stays explicit** even where a static scan of the body could
-  infer it: it is the effect's outward contract and covers writes
-  through pointers. A future lint should warn when a body visibly
-  writes a declared cell that is not listed.
+- **`updates` replaced `writes` (2026-07-07),** and the change-tracking
+  vocabulary is **changed** (the `changed` state modifier, `Changed0`,
+  `CHG_*` masks) with "dirty bits" acknowledged once as the traditional name.
+  `updates` reads intuitively ("on Up, updates DotY") and names the
+  clause's real job: notifying Glimmer of mutation without it reading
+  the Z80. The clause stays explicit even where a static scan of the
+  body could infer it: it is the effect's outward contract and covers
+  writes through pointers. A future lint should warn when a body
+  visibly updates a declared cell that is not listed.
+
+- **Uniqueness is Glimmer's job; AZM is the backstop (2026-07-07).**
+  Block-local `_labels` are Glim syntax, compiled away into globally
+  unique `Glim_<Effect>_<label>` names — the generated file contains
+  only globally unique labels, so Glimmer does not depend on any future
+  AZM local-symbol scoping. The rewrite stays even if AZM gains it: the
+  qualified name carries the block's identity into the symbol map and
+  the debugger, and it is part of the label-anchored mapping contract.
 
 - **Cards are sections, not blocks (2026-07-06).** `card <Name>` starts
   a section that runs to the next `card` line or end of file — no
@@ -189,12 +247,14 @@ tile-decl       ::= "tile" identifier "color" color-name
 
 Open syntax questions to settle before implementing:
 
-- **`->` vs a word.** `bind key KEY_2 rising fires Up` reads aloud
+- **The block keyword is the phase (2026-07-07):** `compute X`
+  (derive), `effect Y` (logic), `render Z`. The first word carries both
+  what a declaration is and when it runs, and each keyword enforces its
+  constraints (render cannot update; compute must). "Block" is the
+  umbrella term in prose. Lineage acknowledged: this is Vue's shape —
+  state=data, compute=computed, effect=watch, render=template. This
+  replaced phase modifiers on the effect line, which had replaced the
+  `phase` header line.- **`->` vs a word.** `bind key KEY_2 rising fires Up` reads aloud
   better; `->` is more scannable and matches the dataflow diagrams.
   Current position: keep `->`, precisely because it has exactly one
   meaning. Revisit if user testing shows confusion.
-- **Phase as a modifier on the effect line.** `effect DrawDot render`
-  instead of a `phase render` header line. Saves one line per
-  non-logic effect; costs a second place to look for the phase.
-  Floated 2026-07-06, undecided — revisit with the broader effect-syntax
-  pass.

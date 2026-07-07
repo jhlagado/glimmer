@@ -6,15 +6,14 @@
  *   program <Name>
  *   platform <name>          (optional; currently tec1g-mon3)
  *   display <name>           (optional; currently matrix8x8, needs platform)
- *   state <Name> : <byte|word> [= <value>] [dirty_on_start]
+ *   state <Name> : <byte|word> [= <value>] [changed]
  *   pulse <Name>
  *   bind key <KEY_NAME> rising -> <PulseName>
- *   effect <Name>
- *       phase <derive|logic|render>     (optional; defaults to logic)
- *       on <Cell>[, <Cell>...]
- *       writes <Cell>[, <Cell>...]
- *   begin
- *       ...verbatim Z80 fragment body...
+ *   compute <Name>   |  effect <Name>  |  render <Name>
+ *       on <Cell>[, <Cell>...]           (the keyword is the phase:
+ *       updates <Cell>[, <Cell>...]       compute=derive, effect=logic,
+ *   begin                                 render=render; render blocks
+ *       ...verbatim Z80 block body...     take no updates)
  *   end
  *
  * Comments start with ';' outside z80 bodies. Bodies are kept verbatim.
@@ -29,7 +28,7 @@ import type {
   PulseDecl,
   StateDecl,
 } from './model.js';
-import { EFFECT_PHASES, TEC1G_KEY_CODES } from './model.js';
+import { TEC1G_KEY_CODES } from './model.js';
 
 const PLATFORMS = ['tec1g-mon3'];
 const DISPLAYS = ['matrix8x8'];
@@ -41,7 +40,7 @@ export interface ParseResult {
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const STATE_RE =
-  /^state\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(byte|word)(?:\s*=\s*(\S+))?(\s+dirty_on_start)?$/;
+  /^state\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(byte|word)(?:\s*=\s*(\S+))?(\s+changed)?$/;
 const BIND_KEY_RE =
   /^bind\s+key\s+([A-Za-z_][A-Za-z0-9_]*)\s+rising\s*->\s*([A-Za-z_][A-Za-z0-9_]*)$/;
 
@@ -130,7 +129,7 @@ export function parseGlimmer(source: string): ParseResult {
         error(lineNo, `Invalid state declaration: "${text}".`);
         continue;
       }
-      const [, name, type, initialText, dirtyFlag] = match;
+      const [, name, type, initialText, changedFlag] = match;
       let initial = 0;
       if (initialText !== undefined) {
         const parsed = parseNumber(initialText);
@@ -144,7 +143,7 @@ export function parseGlimmer(source: string): ParseResult {
         name: name as string,
         type: type as StateDecl['type'],
         initial,
-        dirtyOnStart: dirtyFlag !== undefined,
+        changedOnStart: changedFlag !== undefined,
         line: lineNo,
       });
       continue;
@@ -179,17 +178,30 @@ export function parseGlimmer(source: string): ParseResult {
       continue;
     }
 
-    if (text.startsWith('effect ')) {
-      const name = text.slice('effect '.length).trim();
+    const blockMatch = /^(effect|compute|render)\s+(.*)$/.exec(text);
+    if (blockMatch) {
+      // Block declarations: the keyword is the phase.
+      //   compute X  — derive phase; state computed from other state
+      //   effect Y   — logic phase; ordinary game/app behaviour
+      //   render Z   — render phase; state depicted, never updated
+      const keyword = blockMatch[1] as 'effect' | 'compute' | 'render';
+      const phase: EffectPhase =
+        keyword === 'compute' ? 'derive' : keyword === 'render' ? 'render' : 'logic';
+      const parts = (blockMatch[2] ?? '').trim().split(/\s+/);
+      const name = parts[0] ?? '';
       if (!IDENT.test(name)) {
-        error(lineNo, `Invalid effect name "${name}".`);
+        error(lineNo, `Invalid ${keyword} name "${name}".`);
       }
-      // Logic is the default phase; only derive and render need stating.
-      let phase: EffectPhase = 'logic';
+      if (parts.length > 1) {
+        error(
+          lineNo,
+          `${keyword} takes a single name; unexpected "${parts[1]}". (Phase modifiers were replaced by the compute/render keywords.)`,
+        );
+      }
       const depends: string[] = [];
-      const writes: string[] = [];
+      const updates: string[] = [];
 
-      // Effect header lines until the begin body opens.
+      // Header lines until the begin body opens.
       let sawBody = false;
       while (i < lines.length) {
         const headerLineNo = i + 1;
@@ -200,31 +212,19 @@ export function parseGlimmer(source: string): ParseResult {
           sawBody = true;
           break;
         }
-        if (header.startsWith('phase ')) {
-          const value = header.slice('phase '.length).trim();
-          if ((EFFECT_PHASES as readonly string[]).includes(value)) {
-            phase = value as EffectPhase;
-          } else {
-            error(
-              headerLineNo,
-              `Unknown effect phase "${value}". Expected one of: ${EFFECT_PHASES.join(', ')}.`,
-            );
-          }
-          continue;
-        }
         if (header.startsWith('on ')) {
           depends.push(...splitNames(header.slice('on '.length)));
           continue;
         }
-        if (header.startsWith('writes ')) {
-          writes.push(...splitNames(header.slice('writes '.length)));
+        if (header.startsWith('updates ')) {
+          updates.push(...splitNames(header.slice('updates '.length)));
           continue;
         }
-        error(headerLineNo, `Unexpected line in effect ${name}: "${header}".`);
+        error(headerLineNo, `Unexpected line in ${keyword} ${name}: "${header}".`);
       }
 
       if (!sawBody) {
-        error(lineNo, `Effect ${name} has no begin...end body.`);
+        error(lineNo, `${keyword} ${name} has no begin...end body.`);
         continue;
       }
 
@@ -241,15 +241,30 @@ export function parseGlimmer(source: string): ParseResult {
         body.push(raw);
       }
       if (!sawEnd) {
-        error(lineNo, `Effect ${name}: missing end.`);
+        error(lineNo, `${keyword} ${name}: missing end.`);
         continue;
       }
 
       if (depends.length === 0) {
-        error(lineNo, `Effect ${name} has no "on" triggers; it would never run.`);
+        error(lineNo, `${keyword} ${name} has no "on" triggers; it would never run.`);
         continue;
       }
-      effects.push({ name, phase, depends, writes, body, line: lineNo });
+      // The keyword carries its constraints.
+      if (keyword === 'render' && updates.length > 0) {
+        error(
+          lineNo,
+          `render ${name} cannot update state cells: render blocks depict state. Use effect or compute.`,
+        );
+        continue;
+      }
+      if (keyword === 'compute' && updates.length === 0) {
+        error(
+          lineNo,
+          `compute ${name} must declare updates: computing state is a compute block's purpose.`,
+        );
+        continue;
+      }
+      effects.push({ name, phase, depends, updates, body, line: lineNo });
       continue;
     }
 
@@ -302,14 +317,30 @@ function validateReferences(
     diagnostics.push({ line, message });
   };
 
-  const cellNames = new Set<string>();
-  for (const cell of [...parts.states, ...parts.pulses]) {
-    if (cellNames.has(cell.name)) {
-      error(cell.line, `Duplicate state/pulse name "${cell.name}".`);
+  // All declared names — states, pulses, effects (and future constructs) —
+  // share one namespace: they all project into one flat AZM symbol space.
+  // Names that would collide with generated or profile symbols are
+  // reserved so the diagnostic points at the .glim line, with AZM's
+  // global-uniqueness check as the backstop.
+  const declaredNames = new Set<string>();
+  const declare = (name: string, line: number, kind: string): void => {
+    if (declaredNames.has(name)) {
+      error(line, `Duplicate name "${name}": all declared names share one namespace.`);
     }
-    cellNames.add(cell.name);
-  }
+    declaredNames.add(name);
+    if (/^(Glim|CHG_|__)/.test(name) || RESERVED_NAMES.has(name)) {
+      error(
+        line,
+        `Reserved name "${name}": it belongs to the generated runtime (${kind}s cannot use Glim*/CHG_*/__* or runtime symbols).`,
+      );
+    }
+  };
 
+  for (const state of parts.states) declare(state.name, state.line, 'state');
+  for (const pulse of parts.pulses) declare(pulse.name, pulse.line, 'pulse');
+  for (const effect of parts.effects) declare(effect.name, effect.line, 'effect');
+
+  const cellNames = new Set([...parts.states, ...parts.pulses].map((cell) => cell.name));
   const stateNames = new Set(parts.states.map((state) => state.name));
   const pulseNames = new Set(parts.pulses.map((pulse) => pulse.name));
 
@@ -319,21 +350,42 @@ function validateReferences(
     }
   }
 
-  const effectNames = new Set<string>();
   for (const effect of parts.effects) {
-    if (effectNames.has(effect.name)) {
-      error(effect.line, `Duplicate effect name "${effect.name}".`);
-    }
-    effectNames.add(effect.name);
     for (const dep of effect.depends) {
       if (!cellNames.has(dep)) {
         error(effect.line, `Effect ${effect.name} triggers on undeclared cell "${dep}".`);
       }
     }
-    for (const target of effect.writes) {
+    for (const target of effect.updates) {
       if (!stateNames.has(target)) {
-        error(effect.line, `Effect ${effect.name} writes undeclared state "${target}".`);
+        error(effect.line, `Effect ${effect.name} updates undeclared state "${target}".`);
       }
     }
   }
 }
+
+/** Symbols the generated runtime and profiles own; user names must avoid them. */
+const RESERVED_NAMES = new Set([
+  'Changed0',
+  'MainLoop',
+  'Framebuffer',
+  'PrevKeys',
+  'ScanFrame',
+  'MxMask',
+  'FbPlot',
+  'FbClear',
+  'ScanDwellPeriod',
+  'ApiScanKeys',
+  'PortRow',
+  'PortRed',
+  'PortGreen',
+  'PortBlue',
+  'COLOR_RED',
+  'COLOR_GREEN',
+  'COLOR_BLUE',
+  'COLOR_WHITE',
+  'API_ReadKeys',
+  'API_DrawChar',
+  'API_FlushDisplay',
+  'API_InitDisplay',
+]);

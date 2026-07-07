@@ -17,7 +17,7 @@ nav_exclude: true
 Glimmer is a preprocessor and project format for AZM, the assembler used
 by the Debug80 environment. A Glimmer program is written as declarative
 structure — state cells, pulses, input bindings, and effects — around
-small fragments of real Z80 assembly. Glimmer generates the runtime glue;
+small blocks of real Z80 assembly. Glimmer generates the runtime glue;
 you write the behaviour.
 
 The first target is game writing for the TEC-1G under MON-3.
@@ -32,6 +32,6 @@ The first target is game writing for the TEC-1G under MON-3.
 - [Glim Grammar Reference](../reference/glim-grammar.md) — the formal
   grammar and the syntax design rules
 - [AZM Book 0 — Assembler Manual](https://debug80.com/azm-book/book0/) —
-  the assembly language Glimmer fragments are written in
+  the assembly language Glimmer blocks are written in
 - [Debug80 documentation](https://debug80.com/) — debugging the assembled
   output
