@@ -64,3 +64,4 @@ generated `examples/dot.asm` runs under Debug80's TEC-1G platform.
 | `codebase/`                 | This engineering manual                                    |
 | `manual/`                   | User manual draft, future debug80-docs section             |
 | `reference/glim-grammar.md` | Formal grammar and syntax design rules                     |
+| `plans/v0.3.md`             | v0.3 work plan: resources, arrays, flag banks              |

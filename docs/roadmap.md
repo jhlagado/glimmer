@@ -179,7 +179,7 @@ movement is now held-autorepeat. Both pass `--rc strict
 --reg-profile mon3`. Remaining growth path: trail-drawing mode, then
 snake.
 
-**v0.3 — Resources and scale.** Declarative resources compiled to data
+**v0.3 — Resources and scale.** (Work plan: [plans/v0.3.md](plans/v0.3.md).) Declarative resources compiled to data
 tables: shapes/sprites (row bitmaps + colour), tunes, LCD text/scripts,
 and curves (P9): easing tables computed at build time in destination
 space, driven by v0.2's ramps — Tom-and-Jerry motion (ease-in/out,
