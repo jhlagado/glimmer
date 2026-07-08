@@ -7,6 +7,7 @@ import { compile } from '@jhlagado/azm/compile';
 
 import { compileToAzm } from '../src/index.js';
 import { generateAzm, namespaceLocalLabels } from '../src/generate.js';
+import { loadGlimmerProgram } from '../src/load.js';
 import { parseGlimmer } from '../src/parse.js';
 
 const counterToy = readFileSync(path.join(import.meta.dirname, '../examples/counter.glim'), 'utf8');
@@ -95,7 +96,9 @@ describe('generateAzm', () => {
     expect(source).toContain('ld      a,(Raised1)');
     expect(source).toContain('or      CHG_S8');
     expect(source).toContain('ld      (Raised1),a');
-    expect(source).toContain('ld      a,(Next1)            ; a consumer already ran: defer to next frame');
+    expect(source).toContain(
+      'ld      a,(Next1)            ; a consumer already ran: defer to next frame',
+    );
     expect(source).toContain('or      CHG_S8');
     expect(source).toContain('ld      (Next1),a');
     expect(source).toContain('ld      a,(Next1)            ; deferred raises become next frame');
@@ -396,7 +399,10 @@ describe('v0.2 runtime (slide example)', () => {
   });
 
   it('generated Trail source assembles and passes strict register contracts', async () => {
-    const result = compileToAzm(trail);
+    // Trail is a multi-file program (entry + part) since v0.4: load it.
+    const loaded = loadGlimmerProgram(path.join(import.meta.dirname, '../examples/trail.glim'));
+    expect(loaded.diagnostics).toEqual([]);
+    const result = generateAzm(loaded.program!);
     expect(result.diagnostics).toEqual([]);
     expect(result.source).toContain('Trail:            .ds 8, 0   ; byte array');
     const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-trail-'));

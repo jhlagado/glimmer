@@ -26,7 +26,14 @@ export type {
   TimerDecl,
 } from './model.js';
 export { EFFECT_PHASES, PHASES } from './model.js';
-export { parseGlimmer, type ParseResult } from './parse.js';
+export {
+  assembleProgram,
+  parseGlimmer,
+  parseUnit,
+  type ParsedUnit,
+  type ParseResult,
+} from './parse.js';
+export { loadGlimmerProgram, type LoadOptions } from './load.js';
 export { generateAzm, type GenerateOptions, type GenerateResult } from './generate.js';
 
 import type { GlimmerDiagnostic } from './model.js';

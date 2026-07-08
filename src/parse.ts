@@ -38,6 +38,7 @@ import type {
   StateDecl,
   TimerDecl,
 } from './model.js';
+import type { ImportDecl } from './model.js';
 import { FRAME_COUNT, TEC1G_KEY_CODES } from './model.js';
 
 const PLATFORMS = ['tec1g-mon3'];
@@ -57,6 +58,8 @@ const TIMER_RE =
   /^timer\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(byte|word)\s*=\s*(\S+)\s*->\s*([A-Za-z_][A-Za-z0-9_]*)(\s+once)?$/;
 const RAMP_RE =
   /^ramp\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*byte\s+steps\s+(\S+)\s*->\s*([A-Za-z_][A-Za-z0-9_]*)$/;
+const PART_RE = /^part\s+"([^"]+)"$/;
+const IMPORT_RE = /^import\s+"([^"]+)"$/;
 const SOUND_RE = /^sound\s+([A-Za-z_][A-Za-z0-9_]*)\s+len\s+(\S+)\s+div\s+(\S+)$/;
 const SHAPE_RE = /^shape\s+([A-Za-z_][A-Za-z0-9_]*)\s+color\s+([A-Za-z_][A-Za-z0-9_]*)$/;
 const SHAPE_ROW_RE = /^"([.X]+)"$/;
@@ -108,13 +111,47 @@ export function parseNumber(text: string): number | null {
   return Number.isNaN(value) ? null : value;
 }
 
-export function parseGlimmer(source: string): ParseResult {
+/** One parsed source file: an entry or a part, before program assembly. */
+export interface ParsedUnit {
+  kind: 'entry' | 'part';
+  file: string | undefined;
+  programName: string | null;
+  platform: string | null;
+  display: string | null;
+  parts: ImportDecl[];
+  imports: ImportDecl[];
+  states: StateDecl[];
+  pulses: PulseDecl[];
+  timers: TimerDecl[];
+  ramps: RampDecl[];
+  sounds: SoundDecl[];
+  curves: CurveDecl[];
+  shapes: ShapeDecl[];
+  bindings: Binding[];
+  effects: EffectDecl[];
+  diagnostics: GlimmerDiagnostic[];
+}
+
+export function parseUnit(
+  source: string,
+  opts: { kind: 'entry' | 'part'; file?: string } = { kind: 'entry' },
+): ParsedUnit {
   const lines = source.split(/\r?\n/);
   const diagnostics: GlimmerDiagnostic[] = [];
   const error = (line: number, message: string): void => {
-    diagnostics.push({ line, message });
+    diagnostics.push(
+      opts.file === undefined ? { line, message } : { line, message, file: opts.file },
+    );
+  };
+  const entryOnly = (lineNo: number, what: string): void => {
+    error(
+      lineNo,
+      `Only the entry file declares ${what}; parts contribute cells, resources, bindings, and blocks.`,
+    );
   };
 
+  const parts: ImportDecl[] = [];
+  const imports: ImportDecl[] = [];
   let programName: string | null = null;
   let platform: string | null = null;
   let display: string | null = null;
@@ -135,8 +172,34 @@ export function parseGlimmer(source: string): ParseResult {
     i += 1;
     if (text === '') continue;
 
+    if (text.startsWith('part ')) {
+      const match = PART_RE.exec(text);
+      if (!match) {
+        error(lineNo, `Invalid part declaration: "${text}". Expected: part "file.glim".`);
+      } else if (opts.kind === 'part') {
+        entryOnly(lineNo, 'parts');
+      } else {
+        parts.push({ path: match[1] as string, line: lineNo });
+      }
+      continue;
+    }
+
+    if (text.startsWith('import ')) {
+      const match = IMPORT_RE.exec(text);
+      if (!match) {
+        error(lineNo, `Invalid import declaration: "${text}". Expected: import "module.asm".`);
+      } else {
+        imports.push({ path: match[1] as string, line: lineNo });
+      }
+      continue;
+    }
+
     if (text.startsWith('program ')) {
       const name = text.slice('program '.length).trim();
+      if (opts.kind === 'part') {
+        entryOnly(lineNo, 'the program name');
+        continue;
+      }
       if (!IDENT.test(name)) {
         error(lineNo, `Invalid program name "${name}".`);
       } else if (programName !== null) {
@@ -149,6 +212,10 @@ export function parseGlimmer(source: string): ParseResult {
 
     if (text.startsWith('platform ')) {
       const name = text.slice('platform '.length).trim();
+      if (opts.kind === 'part') {
+        entryOnly(lineNo, 'the platform');
+        continue;
+      }
       if (!PLATFORMS.includes(name)) {
         error(lineNo, `Unknown platform "${name}". Supported: ${PLATFORMS.join(', ')}.`);
       } else if (platform !== null) {
@@ -161,6 +228,10 @@ export function parseGlimmer(source: string): ParseResult {
 
     if (text.startsWith('display ')) {
       const name = text.slice('display '.length).trim();
+      if (opts.kind === 'part') {
+        entryOnly(lineNo, 'the display');
+        continue;
+      }
       if (!DISPLAYS.includes(name)) {
         error(lineNo, `Unknown display "${name}". Supported: ${DISPLAYS.join(', ')}.`);
       } else if (display !== null) {
@@ -353,7 +424,10 @@ export function parseGlimmer(source: string): ParseResult {
       }
 
       if (!match) {
-        error(lineNo, `Invalid shape declaration: "${text}". Expected: shape <Name> color <Color>.`);
+        error(
+          lineNo,
+          `Invalid shape declaration: "${text}". Expected: shape <Name> color <Color>.`,
+        );
         continue;
       }
       const name = match[1] as string;
@@ -520,6 +594,73 @@ export function parseGlimmer(source: string): ParseResult {
     error(lineNo, `Unknown statement: "${text}".`);
   }
 
+  return {
+    kind: opts.kind,
+    file: opts.file,
+    programName,
+    platform,
+    display,
+    parts,
+    imports,
+    states,
+    pulses,
+    timers,
+    ramps,
+    sounds,
+    curves,
+    shapes,
+    bindings,
+    effects,
+    diagnostics,
+  };
+}
+
+/**
+ * Merge parsed units (the entry first, then its parts in declaration
+ * order) into one program and validate the whole. Parts contribute to
+ * the same single namespace: the compilation unit is the project.
+ */
+export function assembleProgram(units: ParsedUnit[]): ParseResult {
+  const diagnostics: GlimmerDiagnostic[] = [];
+  const entry = units[0];
+  if (entry === undefined) {
+    return { program: null, diagnostics: [{ line: 0, message: 'Nothing to assemble.' }] };
+  }
+  for (const unit of units) diagnostics.push(...unit.diagnostics);
+
+  const fileOf = new Map<object, string | undefined>();
+  const merged = {
+    states: [] as StateDecl[],
+    pulses: [] as PulseDecl[],
+    timers: [] as TimerDecl[],
+    ramps: [] as RampDecl[],
+    sounds: [] as SoundDecl[],
+    curves: [] as CurveDecl[],
+    shapes: [] as ShapeDecl[],
+    bindings: [] as Binding[],
+    effects: [] as EffectDecl[],
+    imports: [] as ImportDecl[],
+  };
+  for (const unit of units) {
+    for (const key of Object.keys(merged) as (keyof typeof merged)[]) {
+      for (const decl of unit[key]) {
+        fileOf.set(decl, unit.file);
+        (merged[key] as object[]).push(decl);
+      }
+    }
+  }
+  const error = (owner: { line: number } | number, message: string): void => {
+    if (typeof owner === 'number') {
+      diagnostics.push({ line: owner, message, file: entry.file } as GlimmerDiagnostic);
+      return;
+    }
+    const file = fileOf.get(owner);
+    diagnostics.push(
+      file === undefined ? { line: owner.line, message } : { line: owner.line, message, file },
+    );
+  };
+
+  const { programName, platform, display } = entry;
   if (programName === null) {
     error(0, 'Missing program declaration.');
   }
@@ -530,36 +671,33 @@ export function parseGlimmer(source: string): ParseResult {
     error(0, `platform ${platform} currently requires a display declaration.`);
   }
   if (platform === 'tec1g-mon3') {
-    for (const binding of bindings) {
+    for (const binding of merged.bindings) {
       if (!TEC1G_KEY_CODES.has(binding.key)) {
         error(
-          binding.line,
+          binding,
           `Unknown tec1g-mon3 key "${binding.key}". Known keys: KEY_0..KEY_F, KEY_PLUS, KEY_MINUS, KEY_GO, KEY_AD.`,
         );
       }
     }
   } else {
-    for (const binding of bindings) {
+    for (const binding of merged.bindings) {
       if (binding.edge === 'held') {
-        error(binding.line, 'Held bindings require platform tec1g-mon3.');
+        error(binding, 'Held bindings require platform tec1g-mon3.');
       }
     }
   }
-  if (sounds.length > 0 && !(platform === 'tec1g-mon3' && display === 'matrix8x8')) {
-    for (const sound of sounds) {
-      error(sound.line, 'Sound cues require platform tec1g-mon3 with display matrix8x8.');
+  if (merged.sounds.length > 0 && !(platform === 'tec1g-mon3' && display === 'matrix8x8')) {
+    for (const sound of merged.sounds) {
+      error(sound, 'Sound cues require platform tec1g-mon3 with display matrix8x8.');
     }
   }
-  if (shapes.length > 0 && !(platform === 'tec1g-mon3' && display === 'matrix8x8')) {
-    for (const shape of shapes) {
-      error(shape.line, 'Shape resources require platform tec1g-mon3 with display matrix8x8.');
+  if (merged.shapes.length > 0 && !(platform === 'tec1g-mon3' && display === 'matrix8x8')) {
+    for (const shape of merged.shapes) {
+      error(shape, 'Shape resources require platform tec1g-mon3 with display matrix8x8.');
     }
   }
 
-  validateReferences(
-    { states, pulses, timers, ramps, sounds, curves, shapes, bindings, effects },
-    diagnostics,
-  );
+  validateReferences(merged, diagnostics, (owner) => fileOf.get(owner));
 
   if (diagnostics.length > 0 || programName === null) {
     return { program: null, diagnostics };
@@ -569,18 +707,26 @@ export function parseGlimmer(source: string): ParseResult {
       name: programName,
       platform,
       display,
-      states,
-      pulses,
-      timers,
-      ramps,
-      sounds,
-      curves,
-      shapes,
-      bindings,
-      effects,
+      ...merged,
     },
     diagnostics,
   };
+}
+
+/**
+ * Parse a single-file program. Multi-file programs (`part` declarations)
+ * need file loading: use loadGlimmerProgram or the CLI.
+ */
+export function parseGlimmer(source: string): ParseResult {
+  const unit = parseUnit(source, { kind: 'entry' });
+  if (unit.parts.length > 0) {
+    unit.diagnostics.push({
+      line: unit.parts[0]?.line ?? 0,
+      message:
+        'part declarations need file loading: compile with the glimmer CLI (or loadGlimmerProgram).',
+    });
+  }
+  return assembleProgram([unit]);
 }
 
 function splitNames(text: string): string[] {
@@ -604,9 +750,13 @@ function validateReferences(
     | 'effects'
   >,
   diagnostics: GlimmerDiagnostic[],
+  fileOf: (owner: object) => string | undefined = () => undefined,
 ): void {
-  const error = (line: number, message: string): void => {
-    diagnostics.push({ line, message });
+  const error = (owner: { line: number }, message: string): void => {
+    const file = fileOf(owner);
+    diagnostics.push(
+      file === undefined ? { line: owner.line, message } : { line: owner.line, message, file },
+    );
   };
 
   // All declared names — states, pulses, effects (and future constructs) —
@@ -615,27 +765,27 @@ function validateReferences(
   // reserved so the diagnostic points at the .glim line, with AZM's
   // global-uniqueness check as the backstop.
   const declaredNames = new Set<string>();
-  const declare = (name: string, line: number, kind: string): void => {
+  const declare = (owner: { line: number }, name: string, kind: string): void => {
     if (declaredNames.has(name)) {
-      error(line, `Duplicate name "${name}": all declared names share one namespace.`);
+      error(owner, `Duplicate name "${name}": all declared names share one namespace.`);
     }
     declaredNames.add(name);
     if (/^(Glim|Snd_|Curve_|Shape_|CHG_|__)/.test(name) || RESERVED_NAMES.has(name)) {
       error(
-        line,
+        owner,
         `Reserved name "${name}": it belongs to the generated runtime (${kind}s cannot use Glim*/Snd_*/Curve_*/Shape_*/CHG_*/__* or runtime symbols).`,
       );
     }
   };
 
-  for (const state of parts.states) declare(state.name, state.line, 'state');
-  for (const pulse of parts.pulses) declare(pulse.name, pulse.line, 'pulse');
-  for (const timer of parts.timers) declare(timer.name, timer.line, 'timer');
-  for (const ramp of parts.ramps) declare(ramp.name, ramp.line, 'ramp');
-  for (const sound of parts.sounds) declare(sound.name, sound.line, 'sound');
-  for (const curve of parts.curves) declare(curve.name, curve.line, 'curve');
-  for (const shape of parts.shapes) declare(shape.name, shape.line, 'shape');
-  for (const effect of parts.effects) declare(effect.name, effect.line, 'effect');
+  for (const state of parts.states) declare(state, state.name, 'state');
+  for (const pulse of parts.pulses) declare(pulse, pulse.name, 'pulse');
+  for (const timer of parts.timers) declare(timer, timer.name, 'timer');
+  for (const ramp of parts.ramps) declare(ramp, ramp.name, 'ramp');
+  for (const sound of parts.sounds) declare(sound, sound.name, 'sound');
+  for (const curve of parts.curves) declare(curve, curve.name, 'curve');
+  for (const shape of parts.shapes) declare(shape, shape.name, 'shape');
+  for (const effect of parts.effects) declare(effect, effect.name, 'effect');
 
   // `on` accepts anything with a change flag: states, pulses, ramps, and
   // the built-in FrameCount. `updates` accepts what code may write:
@@ -658,20 +808,17 @@ function validateReferences(
 
   for (const binding of parts.bindings) {
     if (!pulseNames.has(binding.target)) {
-      error(binding.line, `Binding target "${binding.target}" is not a declared pulse.`);
+      error(binding, `Binding target "${binding.target}" is not a declared pulse.`);
     }
   }
   for (const timer of parts.timers) {
     if (!pulseNames.has(timer.target)) {
-      error(
-        timer.line,
-        `Timer ${timer.name} fires "${timer.target}", which is not a declared pulse.`,
-      );
+      error(timer, `Timer ${timer.name} fires "${timer.target}", which is not a declared pulse.`);
     }
   }
   for (const ramp of parts.ramps) {
     if (!pulseNames.has(ramp.target)) {
-      error(ramp.line, `Ramp ${ramp.name} fires "${ramp.target}", which is not a declared pulse.`);
+      error(ramp, `Ramp ${ramp.name} fires "${ramp.target}", which is not a declared pulse.`);
     }
   }
 
@@ -681,12 +828,12 @@ function validateReferences(
         const hint = timerNames.has(dep)
           ? ` (timer cells carry no change flag; trigger on the timer's pulse instead)`
           : '';
-        error(effect.line, `Effect ${effect.name} triggers on undeclared cell "${dep}".${hint}`);
+        error(effect, `Effect ${effect.name} triggers on undeclared cell "${dep}".${hint}`);
       }
     }
     for (const target of effect.updates) {
       if (!updateNames.has(target)) {
-        error(effect.line, `Effect ${effect.name} updates undeclared state "${target}".`);
+        error(effect, `Effect ${effect.name} updates undeclared state "${target}".`);
       }
     }
   }

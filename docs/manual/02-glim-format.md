@@ -94,6 +94,29 @@ rising-edge key binding onto a pulse for the generic profile: the pulse
 fires on the frame the key is first pressed, not while it is held. The
 TEC-1G matrix profile also supports held bindings, described below.
 
+## part and import
+
+```
+part "trail-blocks.glim"
+import "lib/double.asm"
+```
+
+Programs grow across files with `part`: the entry file declares
+`program`, `platform`, and `display`, and each part contributes cells,
+resources, bindings, and blocks to the same program and namespace —
+the compilation unit is the project, files are storage. Paths resolve
+relative to the entry file, and diagnostics name the file they come
+from.
+
+`import` brings a hand-written AZM module into the program: its `@`
+labels become callable from any block, and its plain labels stay
+private to the module. Glimmer places the `.import` where the module's
+bytes land outside every execution path.
+
+`glimmer --deps entry.glim` prints the program's dependency report:
+for every cell, who raises it and which blocks it triggers — the
+reactive graph, straight from the declarations.
+
 ## timer and ramp
 
 ```

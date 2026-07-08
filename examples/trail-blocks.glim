@@ -1,0 +1,93 @@
+; Trail's blocks — a part of trail.glim.
+;
+; A part contributes declarations to the entry file's program and
+; namespace. Only the entry declares program, platform, and display.
+
+effect MoveUp
+    on Up
+    updates DotY
+begin
+    ld a,(DotY)
+    or a
+    jr z,_stop
+    dec a
+    ld (DotY),a
+_stop:
+end
+
+effect MoveDown
+    on Down
+    updates DotY
+begin
+    ld a,(DotY)
+    cp 7
+    jr nc,_stop
+    inc a
+    ld (DotY),a
+_stop:
+end
+
+effect MoveLeft
+    on Left
+    updates DotX
+begin
+    ld a,(DotX)
+    or a
+    jr z,_stop
+    dec a
+    ld (DotX),a
+_stop:
+end
+
+effect MoveRight
+    on Right
+    updates DotX
+begin
+    ld a,(DotX)
+    cp 7
+    jr nc,_stop
+    inc a
+    ld (DotX),a
+_stop:
+end
+
+effect StampTrail
+    on DotX, DotY
+    updates Trail
+begin
+    ld a,(DotX)
+    call MxMask
+    ld b,a
+    ld a,(DotY)
+    ld e,a
+    ld d,0
+    ld hl,Trail
+    add hl,de
+    ld a,(hl)
+    or b
+    ld (hl),a
+end
+
+render DrawTrail
+    on Trail, DotX, DotY
+begin
+    call FbClear
+    ld hl,Trail
+    ld de,Framebuffer + 1
+    ld b,8
+_copy:
+    ld a,(hl)
+    ld (de),a
+    inc hl
+    inc de
+    inc de
+    inc de
+    inc de
+    djnz _copy
+    ld a,(DotX)
+    ld b,a
+    ld a,(DotY)
+    ld c,a
+    ld a,COLOR_WHITE
+    call FbPlot
+end

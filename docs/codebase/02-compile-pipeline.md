@@ -146,6 +146,19 @@ Notable constraints the generator honours:
   emits bank-specific masks (`GlimDep_Name__B1`, etc.) and tests only the
   banks a block's triggers occupy.
 
+## Multi-file loading (v0.4)
+
+`src/load.ts` owns file composition: `loadGlimmerProgram(entryPath)`
+parses the entry with `parseUnit`, resolves each `part` path relative
+to the entry, parses parts in part-mode (which rejects entry-only
+declarations), and hands all units to `assembleProgram` — merge into
+one namespace, whole-program validation, diagnostics tagged with their
+file. `parseGlimmer(text)` remains the single-file API and reports
+`part` declarations as needing the loader. Imports are collected per
+unit and emitted as a dedicated `.import` section after the frame
+rollover. The CLI's `--deps` prints the reactive graph via
+`depsReport`.
+
 ## Profiles
 
 `generateAzm` branches on `program.platform`:

@@ -91,13 +91,7 @@ export interface ShapeDecl {
 }
 
 export type CurvePreset =
-  | 'linear'
-  | 'ease_in'
-  | 'ease_out'
-  | 'ease_in_out'
-  | 'sine'
-  | 'overshoot'
-  | 'anticipation';
+  'linear' | 'ease_in' | 'ease_out' | 'ease_in_out' | 'sine' | 'overshoot' | 'anticipation';
 
 /** Build-time byte lookup table for ramp-driven motion or envelopes. */
 export interface CurveDecl {
@@ -148,6 +142,7 @@ export interface GlimmerProgram {
   shapes: ShapeDecl[];
   bindings: Binding[];
   effects: EffectDecl[];
+  imports: ImportDecl[];
 }
 
 /** MON-3 _scanKeys key codes for the tec1g-mon3 platform. */
@@ -166,4 +161,12 @@ export interface GlimmerDiagnostic {
   /** 1-based source line, or 0 for file-level diagnostics. */
   line: number;
   message: string;
+  /** Source file the diagnostic belongs to (multi-file programs). */
+  file?: string;
+}
+
+/** An AZM module brought into the generated program via .import. */
+export interface ImportDecl {
+  path: string;
+  line: number;
 }

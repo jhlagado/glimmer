@@ -9,12 +9,14 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 
-import { compileToAzm, parseGlimmer } from './index.js';
+import type { GlimmerProgram } from './model.js';
+import { generateAzm } from './generate.js';
+import { loadGlimmerProgram } from './load.js';
 import { parseNumber } from './parse.js';
 
 const require = createRequire(import.meta.url);
@@ -27,6 +29,7 @@ function usage(): string {
     '  -o, --output <file>   Output AZM path (default: <entry>.main.asm, the Debug80 entry-point convention)',
     '  --org <addr>          Assembly origin, e.g. $4000 (default: $4000)',
     '  --no-check            Skip the AZM contract-inject/check step',
+    '  --deps                Print the dependency report (writers/readers per cell) and exit',
     '  -V, --version         Print package version',
     '  -h, --help            Print this help',
   ].join('\n');
@@ -50,11 +53,52 @@ function annotateAndCheck(outPath: string, isTec1g: boolean): number {
   return run.status ?? 1;
 }
 
+/**
+ * The reactive graph as a report: for every flag-carrying cell, who
+ * raises it and which blocks it triggers — the program's dataflow
+ * without reading any Z80.
+ */
+export function depsReport(program: GlimmerProgram): string {
+  const lines: string[] = [`program ${program.name}`];
+  const cells: Array<{ name: string; kind: string }> = [
+    ...program.states.map((s) => ({
+      name: s.name,
+      kind: `state ${s.type}${s.length !== undefined ? `[${s.length}]` : ''}`,
+    })),
+    ...program.pulses.map((pu) => ({ name: pu.name, kind: 'pulse' })),
+    ...program.timers.map((t) => ({ name: t.name, kind: t.once ? 'timer once' : 'timer' })),
+    ...program.ramps.map((r) => ({ name: r.name, kind: 'ramp' })),
+  ];
+  for (const cell of cells) {
+    const writers: string[] = [];
+    for (const binding of program.bindings) {
+      if (binding.target === cell.name) writers.push(`key ${binding.key} (${binding.edge})`);
+    }
+    for (const timer of program.timers) {
+      if (timer.target === cell.name) writers.push(`timer ${timer.name}`);
+    }
+    for (const ramp of program.ramps) {
+      if (ramp.target === cell.name) writers.push(`ramp ${ramp.name}`);
+    }
+    for (const effect of program.effects) {
+      if (effect.updates.includes(cell.name)) writers.push(effect.name);
+    }
+    const readers = program.effects
+      .filter((effect) => effect.depends.includes(cell.name))
+      .map((effect) => `${effect.name} (${effect.phase})`);
+    lines.push(`  ${cell.name} : ${cell.kind}`);
+    lines.push(`    raised by: ${writers.length > 0 ? writers.join(', ') : '(nothing)'}`);
+    lines.push(`    triggers:  ${readers.length > 0 ? readers.join(', ') : '(nothing)'}`);
+  }
+  return lines.join('\n');
+}
+
 export function main(argv: string[]): number {
   let entry: string | null = null;
   let output: string | null = null;
   let org: number | undefined;
   let check = true;
+  let deps = false;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i] as string;
@@ -77,6 +121,10 @@ export function main(argv: string[]): number {
     }
     if (arg === '--no-check') {
       check = false;
+      continue;
+    }
+    if (arg === '--deps') {
+      deps = true;
       continue;
     }
     if (arg === '--org') {
@@ -105,17 +153,30 @@ export function main(argv: string[]): number {
     return 1;
   }
 
-  let source: string;
-  try {
-    source = readFileSync(entry, 'utf8');
-  } catch (cause) {
-    console.error(`Cannot read ${entry}: ${(cause as Error).message}`);
+  const loaded = loadGlimmerProgram(entry);
+  if (loaded.program === null) {
+    const entryDir = path.dirname(entry);
+    for (const diagnostic of loaded.diagnostics) {
+      const file =
+        diagnostic.file === undefined
+          ? entry
+          : diagnostic.file === path.basename(entry)
+            ? entry
+            : path.join(entryDir, diagnostic.file);
+      const where = diagnostic.line > 0 ? `${file}:${diagnostic.line}` : file;
+      console.error(`${where}: ${diagnostic.message}`);
+    }
     return 1;
   }
 
-  const result = compileToAzm(source, org === undefined ? {} : { org });
-  if (result.source === null) {
-    for (const diagnostic of result.diagnostics) {
+  if (deps) {
+    console.log(depsReport(loaded.program));
+    return 0;
+  }
+
+  const generated = generateAzm(loaded.program, org === undefined ? {} : { org });
+  if (generated.diagnostics.length > 0) {
+    for (const diagnostic of generated.diagnostics) {
       const where = diagnostic.line > 0 ? `${entry}:${diagnostic.line}` : entry;
       console.error(`${where}: ${diagnostic.message}`);
     }
@@ -127,10 +188,10 @@ export function main(argv: string[]): number {
   const outPath =
     output ??
     path.join(path.dirname(entry), `${path.basename(entry, path.extname(entry))}.main.asm`);
-  writeFileSync(outPath, result.source);
+  writeFileSync(outPath, generated.source);
 
   if (check) {
-    const isTec1g = parseGlimmer(source).program?.platform === 'tec1g-mon3';
+    const isTec1g = loaded.program.platform === 'tec1g-mon3';
     const status = annotateAndCheck(outPath, isTec1g);
     if (status !== 0) {
       console.error(`AZM contract check failed for ${outPath}.`);

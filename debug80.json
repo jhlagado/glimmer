@@ -79,6 +79,36 @@
       "asm": "examples/slide.main.asm",
       "artifactBase": "slide",
       "sourceRoots": ["examples"]
+    },
+    "trail": {
+      "outputDir": "build",
+      "platform": "tec1g",
+      "profile": "mon3",
+      "tec1g": {
+        "regions": [
+          {
+            "start": 0,
+            "end": 2047,
+            "kind": "rom"
+          },
+          {
+            "start": 2048,
+            "end": 32767,
+            "kind": "ram"
+          },
+          {
+            "start": 49152,
+            "end": 65535,
+            "kind": "rom"
+          }
+        ],
+        "appStart": 16384,
+        "entry": 0
+      },
+      "sourceFile": "examples/trail.main.asm",
+      "asm": "examples/trail.main.asm",
+      "artifactBase": "trail",
+      "sourceRoots": ["examples"]
     }
   }
 }

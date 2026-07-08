@@ -93,6 +93,20 @@ statement       ::= program-decl
                   | block-decl
 
 program-decl    ::= "program" identifier
+
+part-decl       ::= "part" string
+                  ; entry file only. Merge semantics, not inclusion:
+                  ; the named .glim file's declarations join the same
+                  ; program and namespace. Paths resolve relative to
+                  ; the entry file. Parts may not declare program,
+                  ; platform, display, or parts.
+
+import-decl     ::= "import" string
+                  ; brings a hand-written AZM module (@ exports public,
+                  ; plain labels private) into the generated program.
+                  ; Emitted in a dedicated section outside every
+                  ; execution path, because import bytes land at the
+                  ; directive.
 platform-decl   ::= "platform" platform-name        ; "tec1g-mon3"
 display-decl    ::= "display" display-name          ; "matrix8x8"
 
@@ -221,17 +235,6 @@ bindings graduated to the implemented grammar in v0.2.)
 routine-decl    ::= "routine" identifier
                     contract-comment?
                     "begin" newline azm-line* "end"
-
-part-decl       ::= "part" string
-                  ; merge semantics, not inclusion: the named file's
-                  ; declarations join the same program and namespace.
-                  ; Only the entry file declares program/platform/display.
-
-import-decl     ::= "import" string
-                  ; brings an AZM module (.asm with @ exports) into the
-                  ; generated program. Emitted in a dedicated section:
-                  ; AZM import names are order-independent, but bytes
-                  ; land at the directive, so it never sits in a block.
 
 card-decl       ::= "card" identifier
                   ; a section header with no closing keyword: the card

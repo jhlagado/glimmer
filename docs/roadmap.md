@@ -200,7 +200,16 @@ richer sprite/tile resources for non-matrix profiles, and word-state
 change semantics. Landed examples are `counter.glim`, `dot.glim`,
 `slide.glim`, and `trail.glim`.
 
-**v0.4 — Project structure.** Multi-file programs with merge semantics,
+**v0.4 — Project structure. ✅ First slice landed 2026-07-08**
+(plan: [plans/v0.4.md](plans/v0.4.md)): `part "file.glim"` merges
+declarations into one program/namespace with file-tagged diagnostics
+(`examples/trail.glim` + `trail-blocks.glim`); `import "module.asm"`
+brings AZM modules in, emitted outside every execution path;
+`glimmer --deps` prints the writers/readers report per cell. Deferred
+within the milestone: generated output as `.import` modules (file-layout
+decision pending), per-block assemble/check, `.glim` libraries.
+
+Original scope: multi-file programs with merge semantics,
 not textual inclusion: the entry file declares program/platform/display
 and names its parts (`part "input.glim"`), and every part contributes
 declarations to one program with one shared namespace — the compilation

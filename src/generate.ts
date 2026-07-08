@@ -479,6 +479,17 @@ export function generateAzm(
   }
   op('ret');
 
+  if (program.imports.length > 0) {
+    emit();
+    emit('; --- imported AZM modules ---');
+    emit('; Import names resolve program-wide; bytes land here, outside');
+    emit("; every execution path. @ labels are the modules' public API.");
+    const importPaths = [...new Set(program.imports.map((imp) => imp.path))];
+    for (const importPath of importPaths) {
+      op(`.import "${importPath}"`);
+    }
+  }
+
   if (program.curves.length > 0) {
     emit();
     emitCurveResources(program.curves, emit, op);
