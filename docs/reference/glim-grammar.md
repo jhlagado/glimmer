@@ -149,11 +149,11 @@ Semantic constraints enforced after parsing:
 
 - exactly one `program`; `platform` and `display` at most once, and only
   together
-- all declared names — states, pulses, timers, ramps, sounds, and blocks —
-  share one namespace and must be unique (every name projects into one flat
-  AZM symbol space)
+- all declared names — states, pulses, timers, ramps, sounds, curves, and
+  blocks — share one namespace and must be unique (every name projects into
+  one flat AZM symbol space)
 - names may not collide with generated or profile symbols: the `Glim`,
-  `Snd_`, `CHG_`, and `__` prefixes and the runtime/profile names
+  `Snd_`, `Curve_`, `CHG_`, and `__` prefixes and the runtime/profile names
   (`Changed0`, `MainLoop`, `Framebuffer`, the library routines) are
   reserved, so the diagnostic lands on the `.glim` line; AZM's
   global-uniqueness check remains the backstop
