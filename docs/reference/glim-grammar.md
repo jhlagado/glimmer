@@ -87,6 +87,7 @@ statement       ::= program-decl
                   | timer-decl
                   | ramp-decl
                   | sound-decl
+                  | curve-decl
                   | bind-decl
                   | block-decl
 
@@ -120,6 +121,13 @@ ramp-decl       ::= "ramp" identifier ":" "byte" "steps" number
 sound-decl      ::= "sound" identifier "len" number "div" number
                   ; non-blocking low-frequency matrix-profile cue.
                   ; len is row ticks; div is the speaker divider.
+
+curve-decl      ::= "curve" identifier preset "steps" number
+                    ( "from" number "to" number )?
+                  ; build-time byte lookup table. Presets: linear,
+                  ; ease_in, ease_out, ease_in_out, sine, overshoot,
+                  ; anticipation.
+preset          ::= identifier
 
 block-decl      ::= block-kind identifier
                     block-header*
@@ -159,6 +167,8 @@ Semantic constraints enforced after parsing:
   but not `on`; ramp cells may appear in both
 - sound cues require `platform tec1g-mon3` with `display matrix8x8`;
   `len` and `div` are byte values from 1 to 255
+- curve resources have `steps` from 2 to 256; `from` and `to` are byte
+  values from 0 to 255 and default to `0` and `steps - 1`
 - the built-in `FrameCount` may appear in `on`; it increments every
   frame and occupies a flag bit only when used
 - `end` terminates a body when it is the only word on the line
@@ -183,13 +193,6 @@ proposal is held to the same symbol rules. (Timers, ramps, and held
 bindings graduated to the implemented grammar in v0.2.)
 
 ```text
-curve-decl      ::= "curve" identifier preset "steps" number
-                    ( "from" number "to" number )?
-                  ; table computed at build time; presets: linear,
-                  ; ease_in, ease_out, ease_in_out, sine, overshoot,
-                  ; anticipation. Explicit value-list form also planned.
-preset          ::= identifier
-
 routine-decl    ::= "routine" identifier
                     contract-comment?
                     "begin" newline azm-line* "end"

@@ -37,6 +37,8 @@ consumes:
   a pulse at the terminal step
 - `SoundDecl` — low-frequency non-blocking matrix-profile cue, emitted as
   a generated `Snd_<Name>` wrapper over `SndStart`
+- `CurveDecl` — build-time byte lookup table emitted as a page-aligned
+  `Curve_<Name>` data table
 - `KeyBinding` — `bind key <KEY> rising -> <Pulse>` or, on TEC-1G,
   `bind key <KEY> held period <N> -> <Pulse>`
 - `EffectDecl` — the shared model for `compute`, `effect`, and `render`
@@ -56,8 +58,8 @@ opens the body, which runs until a line containing only `end`.
 
 After the statement pass, `validateReferences` checks duplicate declared
 names, reserved runtime/profile symbols, binding targets (must be declared
-pulses), timer/ramp targets, sound cue profile constraints, `on`
-triggers, and `updates` targets. `on`
+pulses), timer/ramp targets, sound cue profile constraints, curve preset
+and byte-range constraints, `on` triggers, and `updates` targets. `on`
 accepts flag-carrying cells: states, pulses, ramps, and the built-in
 `FrameCount`. `updates` accepts writable runtime cells: states, timers,
 and ramps. Timer cells carry no change flag, so blocks trigger on the
@@ -71,7 +73,7 @@ profile/API equates, key constants, change-flag constants, per-block
 trigger masks, state/timer/ramp storage, the runtime loop,
 `__PollBindings`, optional `__TickTimers`, per-phase dispatch routines,
 optional `__MergeRaised`, wrapped user blocks, `__EndFrame`, generated
-sound cue wrappers, and any profile library.
+curve tables, generated sound cue wrappers, and any profile library.
 
 Notable constraints the generator honours:
 
@@ -122,6 +124,9 @@ Notable constraints the generator honours:
 - **Sound cues**: `sound Name len N div N` is implemented only for the
   matrix profile. The generator emits `@Snd_Name` wrappers that load A/C
   and jump to `SndStart`; the scan service plays the cue in the background.
+- **Curves**: `curve Name preset steps N from A to B` emits a page-aligned
+  `Curve_Name` byte table. The compiler computes easing at build time;
+  blocks index the table with ordinary Z80.
 
 ## Profiles
 

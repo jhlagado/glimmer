@@ -24,6 +24,8 @@
 
 import type {
   Binding,
+  CurveDecl,
+  CurvePreset,
   EffectDecl,
   EffectPhase,
   GlimmerDiagnostic,
@@ -54,6 +56,17 @@ const TIMER_RE =
 const RAMP_RE =
   /^ramp\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*byte\s+steps\s+(\S+)\s*->\s*([A-Za-z_][A-Za-z0-9_]*)$/;
 const SOUND_RE = /^sound\s+([A-Za-z_][A-Za-z0-9_]*)\s+len\s+(\S+)\s+div\s+(\S+)$/;
+const CURVE_RE =
+  /^curve\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s+steps\s+(\S+)(?:\s+from\s+(\S+)\s+to\s+(\S+))?$/;
+const CURVE_PRESETS: readonly CurvePreset[] = [
+  'linear',
+  'ease_in',
+  'ease_out',
+  'ease_in_out',
+  'sine',
+  'overshoot',
+  'anticipation',
+];
 
 function stripComment(line: string): string {
   const semi = line.indexOf(';');
@@ -97,6 +110,7 @@ export function parseGlimmer(source: string): ParseResult {
   const timers: TimerDecl[] = [];
   const ramps: RampDecl[] = [];
   const sounds: SoundDecl[] = [];
+  const curves: CurveDecl[] = [];
   const bindings: Binding[] = [];
   const effects: EffectDecl[] = [];
 
@@ -247,6 +261,36 @@ export function parseGlimmer(source: string): ParseResult {
         continue;
       }
       sounds.push({ name: match[1] as string, len, div, line: lineNo });
+      continue;
+    }
+
+    if (text.startsWith('curve ')) {
+      const match = CURVE_RE.exec(text);
+      if (!match) {
+        error(
+          lineNo,
+          `Invalid curve declaration: "${text}". Expected: curve <Name> <preset> steps <N> [from <N> to <N>].`,
+        );
+        continue;
+      }
+      const name = match[1] as string;
+      const preset = match[2] as string;
+      if (!CURVE_PRESETS.includes(preset as CurvePreset)) {
+        error(lineNo, `Curve ${name}: unknown preset "${preset}".`);
+        continue;
+      }
+      const steps = parseNumber(match[3] as string);
+      if (steps === null || steps < 2 || steps > 256) {
+        error(lineNo, `Curve ${name}: steps must be between 2 and 256.`);
+        continue;
+      }
+      const from = match[4] === undefined ? 0 : parseNumber(match[4]);
+      const to = match[5] === undefined ? steps - 1 : parseNumber(match[5]);
+      if (from === null || to === null || from < 0 || from > 255 || to < 0 || to > 255) {
+        error(lineNo, `Curve ${name}: from/to values must be bytes between 0 and 255.`);
+        continue;
+      }
+      curves.push({ name, preset: preset as CurvePreset, steps, from, to, line: lineNo });
       continue;
     }
 
@@ -410,7 +454,10 @@ export function parseGlimmer(source: string): ParseResult {
     }
   }
 
-  validateReferences({ states, pulses, timers, ramps, sounds, bindings, effects }, diagnostics);
+  validateReferences(
+    { states, pulses, timers, ramps, sounds, curves, bindings, effects },
+    diagnostics,
+  );
 
   if (diagnostics.length > 0 || programName === null) {
     return { program: null, diagnostics };
@@ -425,6 +472,7 @@ export function parseGlimmer(source: string): ParseResult {
       timers,
       ramps,
       sounds,
+      curves,
       bindings,
       effects,
     },
@@ -442,7 +490,14 @@ function splitNames(text: string): string[] {
 function validateReferences(
   parts: Pick<
     GlimmerProgram,
-    'states' | 'pulses' | 'timers' | 'ramps' | 'sounds' | 'bindings' | 'effects'
+    | 'states'
+    | 'pulses'
+    | 'timers'
+    | 'ramps'
+    | 'sounds'
+    | 'curves'
+    | 'bindings'
+    | 'effects'
   >,
   diagnostics: GlimmerDiagnostic[],
 ): void {
@@ -461,10 +516,10 @@ function validateReferences(
       error(line, `Duplicate name "${name}": all declared names share one namespace.`);
     }
     declaredNames.add(name);
-    if (/^(Glim|Snd_|CHG_|__)/.test(name) || RESERVED_NAMES.has(name)) {
+    if (/^(Glim|Snd_|Curve_|CHG_|__)/.test(name) || RESERVED_NAMES.has(name)) {
       error(
         line,
-        `Reserved name "${name}": it belongs to the generated runtime (${kind}s cannot use Glim*/Snd_*/CHG_*/__* or runtime symbols).`,
+        `Reserved name "${name}": it belongs to the generated runtime (${kind}s cannot use Glim*/Snd_*/Curve_*/CHG_*/__* or runtime symbols).`,
       );
     }
   };
@@ -474,6 +529,7 @@ function validateReferences(
   for (const timer of parts.timers) declare(timer.name, timer.line, 'timer');
   for (const ramp of parts.ramps) declare(ramp.name, ramp.line, 'ramp');
   for (const sound of parts.sounds) declare(sound.name, sound.line, 'sound');
+  for (const curve of parts.curves) declare(curve.name, curve.line, 'curve');
   for (const effect of parts.effects) declare(effect.name, effect.line, 'effect');
 
   // `on` accepts anything with a change flag: states, pulses, ramps, and

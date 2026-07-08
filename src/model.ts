@@ -76,6 +76,25 @@ export interface SoundDecl {
   line: number;
 }
 
+export type CurvePreset =
+  | 'linear'
+  | 'ease_in'
+  | 'ease_out'
+  | 'ease_in_out'
+  | 'sine'
+  | 'overshoot'
+  | 'anticipation';
+
+/** Build-time byte lookup table for ramp-driven motion or envelopes. */
+export interface CurveDecl {
+  name: string;
+  preset: CurvePreset;
+  steps: number;
+  from: number;
+  to: number;
+  line: number;
+}
+
 /** Built-in cell: increments every frame; usable in `on` when needed. */
 export const FRAME_COUNT = 'FrameCount';
 
@@ -111,6 +130,7 @@ export interface GlimmerProgram {
   timers: TimerDecl[];
   ramps: RampDecl[];
   sounds: SoundDecl[];
+  curves: CurveDecl[];
   bindings: Binding[];
   effects: EffectDecl[];
 }

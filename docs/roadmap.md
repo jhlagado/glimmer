@@ -182,11 +182,10 @@ snake.
 **v0.3 — Resources and scale.** (Work plan: [plans/v0.3.md](plans/v0.3.md).) Declarative resources compiled to data
 tables. Sound cues landed first: `sound Name len N div N` emits a
 non-blocking `Snd_<Name>` wrapper over the matrix scan service for
-low-frequency beeps and clicks. Remaining resource work: shapes/sprites
-(row bitmaps + colour), later tunes/LCD text/scripts, and curves (P9):
-easing tables computed at build time in destination
-space, driven by v0.2's ramps — Tom-and-Jerry motion (ease-in/out,
-overshoot, anticipation) for the cost of one indexed load; envelopes as
+low-frequency beeps and clicks. Curves landed next: `curve Name ease_out
+steps N from A to B` emits page-aligned byte tables computed at build
+time and driven by v0.2 ramps. Remaining resource work: shapes/sprites
+(row bitmaps + colour), later tunes/LCD text/scripts, envelopes as
 chained ramps or longer tables.
 Multiple change-flag bytes so programs can exceed 8 cells. Word-state
 change semantics. Target example: CounterToy on real hardware ports plus

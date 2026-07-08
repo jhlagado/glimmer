@@ -139,6 +139,24 @@ describe('v0.2 runtime (slide example)', () => {
     expect(source).toContain('jp      SndStart');
   });
 
+  it('emits build-time curve tables', () => {
+    const sourceText = [
+      'program P',
+      'curve Linear linear steps 8',
+      'curve SlideX ease_out steps 8 from 0 to 7',
+    ].join('\n');
+    const { program, diagnostics: parseDiags } = parseGlimmer(sourceText);
+    expect(parseDiags).toEqual([]);
+    const { source, diagnostics } = generateAzm(program!);
+    expect(diagnostics).toEqual([]);
+    expect(source).toContain('; --- curve resources ---');
+    expect(source).toContain('.align  256');
+    expect(source).toContain('Curve_Linear:');
+    expect(source).toContain('.db     0, 1, 2, 3, 4, 5, 6, 7');
+    expect(source).toContain('Curve_SlideX:');
+    expect(source).toContain('.db     0, 2, 3, 5, 6, 6, 7, 7');
+  });
+
   it('generates rollover, timer, ramp, and service machinery', () => {
     const { program, diagnostics: parseDiags } = parseGlimmer(slide);
     expect(parseDiags).toEqual([]);
@@ -161,6 +179,9 @@ describe('v0.2 runtime (slide example)', () => {
     // Ramp: idle at terminal, completion pulse.
     expect(source).toContain('Travel:           .db 63   ; ramp progress, idle at terminal');
     expect(source).toContain('ld      (Arrived),a');
+    // Curve: Travel maps through an ease-out table.
+    expect(source).toContain('Curve_SlideX:');
+    expect(source).toContain('ld hl,Curve_SlideX');
 
     // Sound + HUD serviced per scan row; library present.
     expect(source).toContain('@Snd_Arrive:');

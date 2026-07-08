@@ -6,9 +6,10 @@
 ;
 ; This program exercises the v0.2 runtime plus the first v0.3 resource:
 ; a ramp drives per-frame motion, a compute block maps progress to
-; position (and receives a deferred change flag when StartSlide rewinds
-; the ramp from the logic phase), a timer provides the blink, sound is a
-; generated non-blocking cue, and the HUD service is called directly.
+; position through an ease-out curve (and receives a deferred change flag
+; when StartSlide rewinds the ramp from the logic phase), a timer
+; provides the blink, sound is a generated non-blocking cue, and the HUD
+; service is called directly.
 
 program Slide
 
@@ -26,6 +27,7 @@ pulse BlinkTick
 ramp Travel : byte steps 64 -> Arrived
 timer Blink : byte = 12 -> BlinkTick
 sound Arrive len 24 div 3
+curve SlideX ease_out steps 64 from 0 to 7
 
 bind key KEY_GO rising -> Go
 
@@ -42,9 +44,11 @@ compute TrackDot
     updates DotX
 begin
     ld a,(Travel)
-    srl a
-    srl a
-    srl a               ; 64 steps -> 8 cells
+    ld e,a
+    ld d,0
+    ld hl,Curve_SlideX
+    add hl,de
+    ld a,(hl)
     ld (DotX),a
 end
 

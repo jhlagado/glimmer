@@ -13,7 +13,7 @@
  * exactly once and declaration order is never semantic.
  */
 
-import type { EffectDecl, GlimmerDiagnostic, GlimmerProgram } from './model.js';
+import type { CurveDecl, CurvePreset, EffectDecl, GlimmerDiagnostic, GlimmerProgram } from './model.js';
 import { EFFECT_PHASES, FRAME_COUNT, TEC1G_KEY_CODES } from './model.js';
 
 export interface GenerateOptions {
@@ -371,6 +371,11 @@ export function generateAzm(
   op('ld      (Next0),a');
   op('ret');
 
+  if (program.curves.length > 0) {
+    emit();
+    emitCurveResources(program.curves, emit, op);
+  }
+
   if (isTec1g) {
     if (program.sounds.length > 0) {
       emit();
@@ -612,6 +617,60 @@ function emitBlockWrapper(
   }
   op('ret');
   emit();
+}
+
+function emitCurveResources(
+  curves: CurveDecl[],
+  emit: (line?: string) => void,
+  op: (text: string) => void,
+): void {
+  emit('; --- curve resources ---');
+  for (const curve of curves) {
+    op('.align  256');
+    emit(`Curve_${curve.name}:`);
+    const values = buildCurveValues(curve);
+    for (let i = 0; i < values.length; i += 16) {
+      op(`.db     ${values.slice(i, i + 16).join(', ')}`);
+    }
+    emit();
+  }
+}
+
+function buildCurveValues(curve: CurveDecl): number[] {
+  return Array.from({ length: curve.steps }, (_, index) => {
+    const t = curve.steps === 1 ? 1 : index / (curve.steps - 1);
+    const eased = ease(curve.preset, t);
+    return clampByte(Math.round(curve.from + eased * (curve.to - curve.from)));
+  });
+}
+
+function ease(preset: CurvePreset, t: number): number {
+  switch (preset) {
+    case 'linear':
+      return t;
+    case 'ease_in':
+      return t * t;
+    case 'ease_out':
+      return 1 - (1 - t) * (1 - t);
+    case 'ease_in_out':
+      return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+    case 'sine':
+      return (1 - Math.cos(Math.PI * t)) / 2;
+    case 'overshoot': {
+      const c1 = 1.70158;
+      const c3 = c1 + 1;
+      return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
+    }
+    case 'anticipation': {
+      const c1 = 1.70158;
+      const c3 = c1 + 1;
+      return c3 * t * t * t - c1 * t * t;
+    }
+  }
+}
+
+function clampByte(value: number): number {
+  return Math.max(0, Math.min(255, value));
 }
 
 function emitSoundCues(

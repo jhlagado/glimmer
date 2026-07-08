@@ -226,6 +226,60 @@ describe('parseGlimmer', () => {
     ]);
   });
 
+  it('parses curve resources', () => {
+    const source = [
+      'program P',
+      'curve SlideX ease_out steps 64 from 0 to 7',
+      'curve Linear linear steps 8',
+    ].join('\n');
+    const { program, diagnostics } = parseGlimmer(source);
+    expect(diagnostics).toEqual([]);
+    expect(program?.curves).toEqual([
+      expect.objectContaining({
+        name: 'SlideX',
+        preset: 'ease_out',
+        steps: 64,
+        from: 0,
+        to: 7,
+      }),
+      expect.objectContaining({
+        name: 'Linear',
+        preset: 'linear',
+        steps: 8,
+        from: 0,
+        to: 7,
+      }),
+    ]);
+  });
+
+  it('validates curve resource semantics', () => {
+    const unknownPreset = ['program P', 'curve Move elastic steps 8 from 0 to 7'].join('\n');
+    expect(
+      parseGlimmer(unknownPreset)
+        .diagnostics.map((d) => d.message)
+        .join('\n'),
+    ).toContain('Curve Move: unknown preset "elastic"');
+
+    const badSteps = ['program P', 'curve Move ease_out steps 1 from 0 to 7'].join('\n');
+    expect(
+      parseGlimmer(badSteps)
+        .diagnostics.map((d) => d.message)
+        .join('\n'),
+    ).toContain('Curve Move: steps must be between 2 and 256');
+
+    const malformedFrom = ['program P', 'curve Move ease_out steps 8 from $1G to 7'].join('\n');
+    expect(
+      parseGlimmer(malformedFrom)
+        .diagnostics.map((d) => d.message)
+        .join('\n'),
+    ).toContain('Curve Move: from/to values must be bytes between 0 and 255');
+
+    const duplicate = ['program P', 'state Move : byte', 'curve Move linear steps 8'].join('\n');
+    expect(parseGlimmer(duplicate).diagnostics).toContainEqual(
+      expect.objectContaining({ message: expect.stringContaining('Duplicate name "Move"') }),
+    );
+  });
+
   it('validates sound cue semantics', () => {
     const genericSound = ['program P', 'sound Beep len 24 div 3'].join('\n');
     expect(
@@ -302,11 +356,13 @@ describe('parseGlimmer', () => {
       'state Framebuffer : byte',
       'pulse GlimTick',
       'sound Snd_Beep len 24 div 3',
+      'curve Curve_Move linear steps 8',
     ].join('\n');
     const { diagnostics } = parseGlimmer(source);
     const messages = diagnostics.map((d) => d.message).join('\n');
     expect(messages).toContain('Reserved name "Framebuffer"');
     expect(messages).toContain('Reserved name "GlimTick"');
     expect(messages).toContain('Reserved name "Snd_Beep"');
+    expect(messages).toContain('Reserved name "Curve_Move"');
   });
 });

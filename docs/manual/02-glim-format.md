@@ -123,6 +123,36 @@ The cue uses the matrix scan service, so `len` is measured in row ticks
 for low-frequency beeps and clicks, not music. Only one cue is active at
 a time; starting a new cue replaces the current one.
 
+## curve
+
+```
+curve SlideX ease_out steps 64 from 0 to 7
+```
+
+Declares a build-time byte table. The compiler computes the values and
+emits a page-aligned AZM table named `Curve_<Name>`:
+
+```asm
+Curve_SlideX:
+    .db ...
+```
+
+Curves are usually driven by ramps. A block reads the ramp cell and indexes
+the generated table with ordinary Z80:
+
+```asm
+ld a,(Travel)
+ld e,a
+ld d,0
+ld hl,Curve_SlideX
+add hl,de
+ld a,(hl)
+```
+
+Presets are `linear`, `ease_in`, `ease_out`, `ease_in_out`, `sine`,
+`overshoot`, and `anticipation`. `from` and `to` are byte values; when
+omitted they default to `0` and `steps - 1`.
+
 ## bind ... held
 
 ```
@@ -210,6 +240,6 @@ blocks in never affects behaviour.
 
 This is an early alpha. The present version supports at most 8 state and
 pulse/ramp/FrameCount flag cells per program (one change-flag byte), a
-small TEC-1G matrix sound-cue backend rather than music, and placeholder
-system API addresses in the generic profile. See the
+small TEC-1G matrix sound-cue backend rather than music, byte-valued curve
+tables, and placeholder system API addresses in the generic profile. See the
 [roadmap](../roadmap.md) for what comes next.

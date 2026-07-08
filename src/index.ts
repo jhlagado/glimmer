@@ -9,6 +9,8 @@
 export type {
   Binding,
   CellType,
+  CurveDecl,
+  CurvePreset,
   EffectDecl,
   EffectPhase,
   GlimmerDiagnostic,
