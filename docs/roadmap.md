@@ -51,8 +51,8 @@ compile; they define the target. The format proposals they raised —
 P1 platform/display declarations, P2 array state, P3 cards, P4 held
 bindings + timers, P5 routines, P6 resources, P7 word semantics,
 P8 profile services — are catalogued in `sketches/README.md` and map onto
-the milestones: P1/P8 land in v0.1–v0.2, P4 in v0.2, P2/P6/P7 in v0.3,
-P5 in v0.4, P3 in v0.5.
+the milestones: P1/P8 land in v0.1–v0.2, P4 in v0.2, P2/P6 in v0.3,
+P5 in v0.4, P3 in v0.5, and P7 remains future word-cell semantics work.
 
 ## What v0 does today
 
