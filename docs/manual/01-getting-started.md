@@ -30,6 +30,12 @@ npx azm examples/counter.main.asm
 which produces Intel HEX, a flat binary, and a `.d8.json` Debug80 map, so
 the program can run and be debugged source-level in Debug80.
 
+To check register contracts on the generated program, `--rc audit`,
+`--rc warn`, and `--rc error` work as-is. Full `--rc strict` checking
+needs AZM's monitor profile, because the program calls MON-3 through
+`RST $10`: `azm --rc strict --reg-profile mon3 <file>` — the generated
+file's header carries this reminder.
+
 ## Your first program
 
 CounterToy is the smallest complete Glimmer program: one state cell, two

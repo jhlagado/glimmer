@@ -100,6 +100,8 @@ describe('tec1g-mon3 matrix8x8 profile', () => {
     const result = compileToAzm(dot);
     expect(result.diagnostics).toEqual([]);
     expect(result.source).toContain('@Glim_DrawDot:');
+    // The generated file documents its own strict-contracts invocation.
+    expect(result.source).toContain('--rc strict --reg-profile mon3');
     expect(result.source).toContain(';! clobbers A,BC,DE,HL,IX,IY');
     const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-dot-'));
     const entry = path.join(dir, 'dot.asm');
