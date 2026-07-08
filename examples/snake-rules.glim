@@ -1,0 +1,207 @@
+; Snake's rules — a part of snake.glim.
+
+effect StartGame
+    on GoP
+    updates Body, HeadIdx, Len, Dir, FoodPos, Alive, Step
+begin
+    ld a,(Alive)
+    or a
+    jr nz,_skip         ; GO only restarts when the game is over
+    ld hl,Body
+    ld (hl),26          ; body: (2,3) then head (3,3)
+    inc hl
+    ld (hl),27
+    ld a,1
+    ld (HeadIdx),a
+    ld a,2
+    ld (Len),a
+    ld a,3
+    ld (Dir),a          ; heading right
+    ld a,42
+    ld (FoodPos),a
+    ld a,10
+    ld (Step),a
+    ld a,1
+    ld (Alive),a
+_skip:
+end
+
+effect TurnUp
+    on UpP
+    updates Dir
+begin
+    ld a,(Dir)
+    cp 1                ; no reversing out of down
+    jr z,_skip
+    xor a
+    ld (Dir),a
+_skip:
+end
+
+effect TurnDown
+    on DownP
+    updates Dir
+begin
+    ld a,(Dir)
+    or a                ; no reversing out of up
+    jr z,_skip
+    ld a,1
+    ld (Dir),a
+_skip:
+end
+
+effect TurnLeft
+    on LeftP
+    updates Dir
+begin
+    ld a,(Dir)
+    cp 3                ; no reversing out of right
+    jr z,_skip
+    ld a,2
+    ld (Dir),a
+_skip:
+end
+
+effect TurnRight
+    on RightP
+    updates Dir
+begin
+    ld a,(Dir)
+    cp 2                ; no reversing out of left
+    jr z,_skip
+    ld a,3
+    ld (Dir),a
+_skip:
+end
+
+effect StepSnake
+    on StepP
+    updates Body, HeadIdx, Len, FoodPos, Alive, Step
+begin
+    ld a,(Alive)
+    or a
+    jp z,_done          ; jp: _done is beyond jr's +127 range
+    ; current head position -> E
+    ld hl,Body
+    ld a,(HeadIdx)
+    add a,l
+    ld l,a
+    ld a,h
+    adc a,0
+    ld h,a
+    ld a,(hl)
+    ld e,a
+    ; new position by Dir, wrapping every edge
+    ld a,(Dir)
+    or a
+    jr nz,_notup
+    ld a,e
+    sub 8
+    and %00111111
+    jr _have
+_notup:
+    cp 1
+    jr nz,_notdown
+    ld a,e
+    add a,8
+    and %00111111
+    jr _have
+_notdown:
+    cp 2
+    jr nz,_right
+    ld a,e
+    dec a
+    and %00000111
+    ld d,a
+    ld a,e
+    and %00111000
+    or d
+    jr _have
+_right:
+    ld a,e
+    inc a
+    and %00000111
+    ld d,a
+    ld a,e
+    and %00111000
+    or d
+_have:
+    ld d,a              ; D = new position (BodyContains preserves D)
+    call BodyContains
+    jr nc,_move
+    xor a               ; bit yourself: game over
+    ld (Alive),a
+    call Snd_Die
+    jp _done
+_move:
+    ld a,(HeadIdx)
+    inc a
+    and %00111111
+    ld (HeadIdx),a
+    ld hl,Body
+    add a,l
+    ld l,a
+    ld a,h
+    adc a,0
+    ld h,a
+    ld (hl),d
+    ; eat?
+    ld a,(FoodPos)
+    cp d
+    jp nz,_done
+    ld a,(Len)
+    cp 62
+    jr nc,_beep         ; full board cap: stop growing
+    inc a
+    ld (Len),a
+    ld a,(Step)         ; quicken the pace, floor at 4
+    cp 4
+    jr c,_beep
+    dec a
+    ld (Step),a
+_beep:
+    call Snd_Eat
+    ; next food: mix the game state into a candidate, then probe for a
+    ; free cell. (MON-3 _random is call 49, but AZM's mon3 register-
+    ; contract profile does not model it yet, so the checked build
+    ; would reject reading A after the RST.)
+    ld a,(FoodPos)
+    rlca
+    rlca
+    ld d,a
+    ld a,(HeadIdx)
+    add a,d
+    add a,17
+    and %00111111
+_probe:
+    ld d,a
+    call BodyContains
+    jr nc,_food
+    ld a,d
+    inc a
+    and %00111111
+    jr _probe
+_food:
+    ld a,d
+    ld (FoodPos),a
+_done:
+end
+
+render DrawBoard
+    on Body, FoodPos, Alive
+begin
+    call FbClear
+    ld a,(FoodPos)
+    ld d,COLOR_RED
+    call PlotPos
+    call DrawBody
+end
+
+render ShowScore
+    on Len
+begin
+    ld a,(Len)
+    ld l,a
+    ld h,0
+    call HudWriteU16
+end

@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -137,6 +137,36 @@ end
     const entry = path.join(dir, 'app.main.asm');
     writeFileSync(entry, generated.source);
     const assembled = await compile(entry, { emitBin: true, emitHex: false, emitD8m: false });
+    expect(assembled.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+  });
+});
+
+describe('snake (first complete game)', () => {
+  it('loads multi-file with import, uses two flag banks, assembles strict-clean', async () => {
+    const entry = path.join(import.meta.dirname, '../examples/snake.glim');
+    const { program, diagnostics } = loadGlimmerProgram(entry);
+    expect(diagnostics).toEqual([]);
+    expect(program?.imports.map((imp) => imp.path)).toEqual(['snake-lib.asm']);
+
+    const generated = generateAzm(program!);
+    expect(generated.diagnostics).toEqual([]);
+    // 6 states + 6 pulses = 12 flags: the second bank is in use.
+    expect(generated.source).toContain('Changed1:');
+    expect(generated.source).toContain('.import "snake-lib.asm"');
+
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-snake-'));
+    writeFileSync(path.join(dir, 'snake.main.asm'), generated.source);
+    writeFileSync(
+      path.join(dir, 'snake-lib.asm'),
+      readFileSync(path.join(import.meta.dirname, '../examples/snake-lib.asm')),
+    );
+    const assembled = await compile(path.join(dir, 'snake.main.asm'), {
+      emitBin: true,
+      emitHex: false,
+      emitD8m: false,
+      registerContracts: 'strict',
+      registerContractsProfile: 'mon3',
+    });
     expect(assembled.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
   });
 });

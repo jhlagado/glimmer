@@ -1,0 +1,45 @@
+; Snake — the first complete game in Glimmer.
+;
+; Press GO to start. Steer with 2/4/6/8 (turns are edge-triggered; no
+; reversing into yourself). Eat the red food to grow: each meal beeps,
+; bumps the seven-segment score, and quickens the step timer. Running
+; into your own body ends the game — press GO to play again.
+;
+; The board wraps at every edge (kinder on an 8x8 field). Positions are
+; packed y*8+x into a 64-byte ring buffer; the body-scan and draw loops
+; live in a hand-written AZM module (snake-lib.asm) brought in with
+; import, and the game rules live in a part.
+
+program Snake
+
+platform tec1g-mon3
+display matrix8x8
+
+import "snake-lib.asm"
+
+state Dir     : byte = 3            ; 0 up, 1 down, 2 left, 3 right
+state HeadIdx : byte = 0
+state Len     : byte = 0 changed    ; 0 = waiting for GO
+state FoodPos : byte = 42 changed
+state Alive   : byte = 0 changed
+state Body    : byte[64]
+
+pulse StepP
+pulse GoP
+pulse UpP
+pulse DownP
+pulse LeftP
+pulse RightP
+
+timer Step : byte = 10 -> StepP     ; writable: eating quickens it
+
+sound Eat len 12 div 2
+sound Die len 200 div 9
+
+bind key KEY_GO rising -> GoP
+bind key KEY_2 rising -> UpP
+bind key KEY_8 rising -> DownP
+bind key KEY_4 rising -> LeftP
+bind key KEY_6 rising -> RightP
+
+part "snake-rules.glim"

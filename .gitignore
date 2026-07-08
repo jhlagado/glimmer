@@ -5,7 +5,7 @@ coverage/
 .DS_Store
 
 # generated build artifacts in examples
-examples/*.asm
+examples/*.main.asm
 examples/*.hex
 examples/*.bin
 examples/*.d8.json

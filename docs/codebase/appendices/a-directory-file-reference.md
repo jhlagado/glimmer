@@ -32,13 +32,14 @@ or change purpose.
 
 ## examples/
 
-| File                | Purpose                                                               |
-| ------------------- | --------------------------------------------------------------------- |
-| `counter.glim`      | CounterToy from the specification, section 10 (generic profile)       |
-| `dot.glim`          | Minimal tec1g-mon3/matrix8x8 program: held-key dot, edge-clamped      |
-| `slide.glim`        | v0.2/v0.3 showcase: ramp slide, curve, shape, sound, timer blink, HUD |
-| `trail.glim`        | v0.3 byte array example: moving dot stamps an 8-row trail buffer      |
-| `trail-blocks.glim` | Trail's blocks as a part: the multi-file demonstration                |
+| File                              | Purpose                                                                     |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| `counter.glim`                    | CounterToy from the specification, section 10 (generic profile)             |
+| `dot.glim`                        | Minimal tec1g-mon3/matrix8x8 program: held-key dot, edge-clamped            |
+| `slide.glim`                      | v0.2/v0.3 showcase: ramp slide, curve, shape, sound, timer blink, HUD       |
+| `trail.glim`                      | v0.3 byte array example: moving dot stamps an 8-row trail buffer            |
+| `trail-blocks.glim`               | Trail's blocks as a part: the multi-file demonstration                      |
+| `snake.glim` + `snake-rules.glim` | The first complete game (multi-file); `snake-lib.asm` is an imported module |
 
 The repo root also carries `debug80.json` with `dot` and `slide` targets so
 the generated `examples/*.main.asm` programs run under Debug80's TEC-1G

@@ -42,7 +42,12 @@ generated AZM source file, which AZM assembles into `.hex`, `.bin`, and a
 - `examples/trail.glim` — byte array state as an 8-row trail buffer on
   the TEC-1G matrix profile.
 
-The repo's `debug80.json` carries `dot` and `slide` targets, so after
+- `examples/snake.glim` — the first complete game: a multi-file program
+  (`part`) with a hand-written imported AZM module, ring-buffer body in
+  array state, food, growth, speedup, sounds, and a HUD score.
+
+The repo's `debug80.json` carries `dot`, `slide`, `trail`, and `snake`
+targets, so after
 `node dist/src/cli.js examples/<name>.glim && npx azm examples/<name>.main.asm`
 they run under Debug80.
 

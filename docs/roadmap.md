@@ -209,6 +209,30 @@ brings AZM modules in, emitted outside every execution path;
 within the milestone: generated output as `.import` modules (file-layout
 decision pending), per-block assemble/check, `.glim` libraries.
 
+**Snake — the growth path's capstone — landed 2026-07-08:**
+`examples/snake.glim` + `snake-rules.glim` (a part) + `snake-lib.asm`
+(an imported hand-written module) is the first complete game in
+Glimmer: ring-buffer body in array state, wrap-around movement, food,
+growth, speedup via the writable timer period, eat/die sounds, score on
+the HUD, GO to start and restart. Written with nothing beyond shipped
+features — the v0.3 acceptance claim, now validated. Findings feed the
+next milestones:
+
+- **Cards evidence (v0.6):** the `Alive` guard opens StepSnake and
+  StartGame — exactly the flag-dispatch boilerplate cards exist to
+  absorb.
+- **Structured-data evidence (v0.5):** the `Body + index` address
+  arithmetic repeats five times across the game and its library; AZM
+  layout types would name it once.
+- **AZM profile gap:** the mon3 register-contract profile models calls
+  13-16, 18, 54 but not 49 (`_random`: out A, destroys B) — snake mixes
+  game state for food placement instead. A one-entry addition to AZM's
+  profiles.ts unlocks the real call.
+- The contract pipeline caught two genuine bugs while writing snake: a
+  `jr` past the ±128 range in the long step block, and the
+  read-after-RST liveness issue above. The checked build earns its
+  keep.
+
 Original scope: multi-file programs with merge semantics,
 not textual inclusion: the entry file declares program/platform/display
 and names its parts (`part "input.glim"`), and every part contributes
