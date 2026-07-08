@@ -273,8 +273,10 @@ symbols.
 - **Profile** — the platform and display selection that shapes the
   generated runtime: equates, input mechanism, loop skeleton, and a small
   library of visible helper routines.
-- **Resource** — a declared non-code asset (sprites, tiles, sounds, text)
-  compiled to data tables. Planned; the design is in the sketches.
+- **Resource** — a declared non-code asset compiled to generated routines
+  or data tables. v0.3 implements matrix sound cues, curve tables, and
+  matrix shape bitmaps; richer sprite, tile, and text resources remain in
+  the sketches and roadmap.
 - **Timer** — a countdown cell that fires a pulse. Implemented in
   oscillator form (reloads from a writable period cell) and one-shot
   form.
