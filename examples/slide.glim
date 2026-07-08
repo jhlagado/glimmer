@@ -4,11 +4,11 @@
 ; marks its arrival, and the seven-segment display counts completed
 ; slides. A timer blinks the dot while it travels.
 ;
-; This program exercises the v0.2 runtime: a ramp drives per-frame
-; motion, a compute block maps progress to position (and receives a
-; deferred change flag when StartSlide rewinds the ramp from the logic
-; phase), a timer provides the blink, and the profile's sound and HUD
-; services are called directly.
+; This program exercises the v0.2 runtime plus the first v0.3 resource:
+; a ramp drives per-frame motion, a compute block maps progress to
+; position (and receives a deferred change flag when StartSlide rewinds
+; the ramp from the logic phase), a timer provides the blink, sound is a
+; generated non-blocking cue, and the HUD service is called directly.
 
 program Slide
 

@@ -63,11 +63,17 @@ function stripComment(line: string): string {
 export function parseNumber(text: string): number | null {
   let value: number;
   if (text.startsWith('$')) {
-    value = Number.parseInt(text.slice(1), 16);
+    const digits = text.slice(1);
+    if (!/^[0-9A-Fa-f]+$/.test(digits)) return null;
+    value = Number.parseInt(digits, 16);
   } else if (/^0x/i.test(text)) {
-    value = Number.parseInt(text.slice(2), 16);
+    const digits = text.slice(2);
+    if (!/^[0-9A-Fa-f]+$/.test(digits)) return null;
+    value = Number.parseInt(digits, 16);
   } else if (text.startsWith('%')) {
-    value = Number.parseInt(text.slice(1), 2);
+    const digits = text.slice(1);
+    if (!/^[01]+$/.test(digits)) return null;
+    value = Number.parseInt(digits, 2);
   } else if (/^[0-9]+$/.test(text)) {
     value = Number.parseInt(text, 10);
   } else {

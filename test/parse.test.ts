@@ -258,6 +258,30 @@ describe('parseGlimmer', () => {
         .join('\n'),
     ).toContain('Sound Beep: div must be between 1 and 255');
 
+    const malformedLen = [
+      'program P',
+      'platform tec1g-mon3',
+      'display matrix8x8',
+      'sound Beep len $1G div 3',
+    ].join('\n');
+    expect(
+      parseGlimmer(malformedLen)
+        .diagnostics.map((d) => d.message)
+        .join('\n'),
+    ).toContain('Sound Beep: len must be between 1 and 255 row ticks');
+
+    const malformedDiv = [
+      'program P',
+      'platform tec1g-mon3',
+      'display matrix8x8',
+      'sound Beep len 24 div %102',
+    ].join('\n');
+    expect(
+      parseGlimmer(malformedDiv)
+        .diagnostics.map((d) => d.message)
+        .join('\n'),
+    ).toContain('Sound Beep: div must be between 1 and 255');
+
     const duplicate = [
       'program P',
       'platform tec1g-mon3',

@@ -150,7 +150,8 @@ Semantic constraints enforced after parsing:
   reserved, so the diagnostic lands on the `.glim` line; AZM's
   global-uniqueness check remains the backstop
 - `bind` targets must be declared pulses
-- `on` names must be declared cells; `updates` names must be states
+- `on` names must be flag-carrying cells; `updates` names must be
+  writable runtime cells
 - every block needs at least one `on` trigger
 - `render` blocks take no `updates`; `compute` blocks require `updates`
 - timer and ramp targets must be declared pulses; timer cells carry no
