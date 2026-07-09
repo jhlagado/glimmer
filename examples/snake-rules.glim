@@ -161,17 +161,10 @@ _move:
     ld (Step),a
 _beep:
     call Snd_Eat
-    ; next food: mix the game state into a candidate, then probe for a
-    ; free cell. (MON-3 _random is call 49, but AZM's mon3 register-
-    ; contract profile does not model it yet, so the checked build
-    ; would reject reading A after the RST.)
-    ld a,(FoodPos)
-    rlca
-    rlca
-    ld d,a
-    ld a,(HeadIdx)
-    add a,d
-    add a,17
+    ; next food: a MON-3 random candidate, then probe for a free cell.
+    ; (_random destroys B; the mon3 contract profile proves the rest.)
+    ld c,ApiRandom
+    rst $10
     and %00111111
 _probe:
     ld d,a

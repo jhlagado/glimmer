@@ -65,28 +65,6 @@ function chgConst(cellName: string): string {
   return `CHG_${cellName.toUpperCase()}`;
 }
 
-/**
- * Namespace block-local labels ("_done") into ordinary globally unique
- * AZM labels ("Glim_ApplyIncrement_done"). Only labels defined inside the
- * block are rewritten. Line count is always preserved (part of the
- * label-anchored mapping contract).
- */
-export function namespaceLocalLabels(body: string[], effectName: string): string[] {
-  const localNames = new Set<string>();
-  for (const line of body) {
-    const def = /^\s*_([A-Za-z][A-Za-z0-9_]*):/.exec(line);
-    if (def) localNames.add(def[1] as string);
-  }
-  if (localNames.size === 0) return body;
-  return body.map((line) =>
-    line.replace(
-      /(^|[^A-Za-z0-9_])_([A-Za-z][A-Za-z0-9_]*)/g,
-      (whole, prefix: string, name: string) =>
-        localNames.has(name) ? `${prefix}Glim_${effectName}_${name}` : whole,
-    ),
-  );
-}
-
 export function generateAzm(
   program: GlimmerProgram,
   options: GenerateOptions = {},
@@ -229,6 +207,7 @@ export function generateAzm(
   if (isTec1g) {
     emit('; --- TEC-1G / MON-3 platform ---');
     emit(`${'ApiScanKeys'.padEnd(17)} .equ 16`);
+    emit(`${'ApiRandom'.padEnd(17)} .equ 49   ; A = random byte, destroys B`);
     emit(`${'PortDigits'.padEnd(17)} .equ $01`);
     emit(`${'PortSegs'.padEnd(17)} .equ $02`);
     emit(`${'PortRow'.padEnd(17)} .equ $05`);
@@ -360,6 +339,19 @@ export function generateAzm(
   }
   emit();
 
+  // Data tables live here, above the first @ label: AZM scopes plain
+  // labels after an @ routine to that routine, so shared tables must be
+  // file-level to stay visible to every block and library routine.
+  if (program.curves.length > 0) {
+    emitCurveResources(program.curves, emit, op);
+  }
+  if (isTec1g) {
+    if (program.shapes.length > 0) {
+      emitShapeResources(program.shapes, emit, op);
+    }
+    emitHudTables(emit, op);
+  }
+
   emit('; --- runtime loop ---');
   emit('@Start:');
   if (isTec1g) {
@@ -490,16 +482,7 @@ export function generateAzm(
     }
   }
 
-  if (program.curves.length > 0) {
-    emit();
-    emitCurveResources(program.curves, emit, op);
-  }
-
   if (isTec1g) {
-    if (program.shapes.length > 0) {
-      emit();
-      emitShapeResources(program.shapes, emit, op);
-    }
     if (program.sounds.length > 0) {
       emit();
       emitSoundCues(program, emit, op);
@@ -725,7 +708,11 @@ function emitBlockWrapper(
 ): void {
   emit(`; --- ${effect.phase} block ${effect.name} ---`);
   emit(`@Glim_${effect.name}:`);
-  for (const line of namespaceLocalLabels(effect.body, effect.name)) {
+  // The body is emitted byte-for-byte verbatim: AZM (>= 0.2.17) scopes
+  // plain labels to the enclosing @ routine, so two blocks may both
+  // define _done without colliding. Verbatim bodies are part of the
+  // label-anchored source-mapping contract.
+  for (const line of effect.body) {
     emit(line);
   }
   for (const [bank, bankMasks] of [...masks.now.entries()].sort(([a], [b]) => a - b)) {
@@ -1162,10 +1149,14 @@ function emitMatrixLibrary(
   op('inc     bc');
   op('pop     hl');
   op('ret');
-  emit();
+}
+
+function emitHudTables(emit: (line?: string) => void, op: (text: string) => void): void {
+  emit('; --- HUD data tables ---');
   emit('HudMaskTbl:');
   op('.db     $20, $10, $08, $04, $02, $01');
   emit('HudGlyphTbl:');
   op('.db     $EB, $28, $CD, $AD, $2E, $A7, $E7, $29');
   op('.db     $EF, $2F, $6F, $E6, $C3, $EC, $C7, $47');
+  emit();
 }

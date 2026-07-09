@@ -224,7 +224,8 @@ propagation and the final `ret`.
 ### 3.6 Blocks And Local Labels
 
 The block is Glimmer's unit of code: a short, named piece of Z80 with one
-job. Labels that begin with an underscore are local to their block:
+job. Labels that begin with an underscore are local to their block by
+convention:
 
 ```asm
     jr c,_done
@@ -233,20 +234,17 @@ job. Labels that begin with an underscore are local to their block:
 _done:
 ```
 
-Code generation renames them into ordinary globally unique AZM labels, so
-every block can have its own `_done`:
-
-```asm
-    jr c,Glim_ApplyIncrement_done
-    xor a
-    ld (hl),a
-Glim_ApplyIncrement_done:
-```
+The body passes into the generated file byte-for-byte verbatim. Locality
+is AZM's doing, not a rewrite: every block compiles under an `@Glim_<Name>:`
+entry label, and AZM (0.2.17+) scopes plain labels to their enclosing `@`
+routine, so every block can have its own `_done`. The underscore is a
+Glimmer style convention that signals intent; any plain label spelling
+gets the same routine-local scope.
 
 (`$` stays out of generated names: in AZM it is the current-address
-operator and the hexadecimal prefix. Label privacy, where a program grows
-to need it, is AZM's `.import` mechanism: `@Name:` labels are public
-exports, plain labels are private to their source unit.)
+operator and the hexadecimal prefix. Label privacy at file granularity is
+AZM's `.import` mechanism: `@Name:` labels are public exports, plain
+labels above a file's first `@` label are private to their source unit.)
 
 Style: one instruction per line. AZM's backslash stacking
 (`ld a,(hl) \ inc hl`) remains available for dense passages, and single
@@ -365,8 +363,8 @@ GlimSkip_DrawCount:
 `updates` compiles to change propagation in the block's wrapper:
 
 ```asm
-Glim_ApplyIncrement:
-    ; the block, verbatim (local labels renamed)
+@Glim_ApplyIncrement:
+    ; the block, byte-for-byte verbatim
     ld hl,Count
     inc (hl)
 
@@ -544,19 +542,19 @@ DecPressed:       .db 0
 Changed0:         .db %00000001
 ```
 
-The wrapped block, with its local label renamed and the `updates`
-propagation appended:
+The wrapped block, body verbatim (AZM scopes `_done` to the `@` routine)
+with the `updates` propagation appended:
 
 ```asm
-Glim_ApplyIncrement:
+@Glim_ApplyIncrement:
     ld hl,Count
     inc (hl)
     ld a,(hl)
     cp 10
-    jr c,Glim_ApplyIncrement_done
+    jr c,_done
     xor a
     ld (hl),a
-Glim_ApplyIncrement_done:
+_done:
 
     ld a,(Raised0)
     or CHG_COUNT

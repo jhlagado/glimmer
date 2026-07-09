@@ -14,7 +14,7 @@ from `.glim` meta-source to generated AZM, the diagnostics model, and the
 verification lanes that support the implementation.
 
 This manual is updated against the Glimmer codebase state through
-**2026-07-08**. Use it as the map when planning changes. Use the TypeScript
+**2026-07-09**. Use it as the map when planning changes. Use the TypeScript
 source and tests as the final authority when a detail has changed.
 
 Glimmer is deliberately small. The codebase is organised around one central

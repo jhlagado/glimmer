@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { compile } from '@jhlagado/azm/compile';
 
 import { compileToAzm } from '../src/index.js';
-import { generateAzm, namespaceLocalLabels } from '../src/generate.js';
+import { generateAzm } from '../src/generate.js';
 import { loadGlimmerProgram } from '../src/load.js';
 import { parseGlimmer } from '../src/parse.js';
 
@@ -31,10 +31,10 @@ describe('generateAzm', () => {
     expect(source).toContain('call    __RunRenderEffects');
     expect(source).not.toContain('__RunDeriveEffects');
 
-    // Block-local labels are namespaced per effect.
-    expect(source).toContain('Glim_ApplyIncrement_done:');
-    expect(source).toContain('Glim_ApplyDecrement_done:');
-    expect(source).toContain('jr nz,Glim_ApplyDecrement_not_zero');
+    // Block-local labels pass through verbatim; AZM scopes them to the
+    // enclosing @Glim_<Effect> routine.
+    expect(source).toContain('_done:');
+    expect(source).toContain('jr nz,_not_zero');
 
     // updates Count marks the change flag after the user body.
     expect(source).toContain('or      CHG_COUNT');
@@ -199,14 +199,37 @@ describe('generateAzm', () => {
   });
 });
 
-describe('namespaceLocalLabels', () => {
-  it('rewrites only labels defined in the block', () => {
-    const body = ['    jr c,_done', '_done:', '    .db 1 ; directive, not a label'];
-    expect(namespaceLocalLabels(body, 'E')).toEqual([
-      '    jr c,Glim_E_done',
-      'Glim_E_done:',
-      '    .db 1 ; directive, not a label',
-    ]);
+describe('verbatim block bodies', () => {
+  it('emits block-local labels untouched; AZM scopes them to the @ routine', () => {
+    const sourceText = [
+      'program Twins',
+      'state N : byte',
+      'pulse Go',
+      'bind key KEY_1 rising -> Go',
+      'effect A',
+      'on Go',
+      'updates N',
+      'begin',
+      '    jr _done',
+      '_done:',
+      'end',
+      'effect B',
+      'on Go',
+      'updates N',
+      'begin',
+      '    jr _done',
+      '_done:',
+      'end',
+    ].join('\n');
+    const { program, diagnostics: parseDiags } = parseGlimmer(sourceText);
+    expect(parseDiags).toEqual([]);
+    const { source, diagnostics } = generateAzm(program!);
+    expect(diagnostics).toEqual([]);
+    // Both blocks keep their _done labels verbatim — no Glim_ renaming.
+    expect(source.match(/^_done:$/gm)).toHaveLength(2);
+    expect(source).toContain('jr _done');
+    expect(source).not.toContain('Glim_A__done');
+    expect(source).not.toContain('Glim_A_done');
   });
 });
 

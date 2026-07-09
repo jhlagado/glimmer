@@ -276,9 +276,12 @@ changes are never implied. The body between `begin` and `end` is real
 AZM assembly. AZM can stack instructions on one line, but Glimmer examples
 prefer one instruction per line because it is easier to read and teach.
 
-Labels using a single leading underscore are local to the block. Glimmer
-rewrites them into globally unique labels in the generated output, so every
-block can have its own `_done`.
+Labels inside a block are local to it: every block compiles under an
+`@`-prefixed routine entry, and AZM scopes plain labels to their enclosing
+`@` routine, so every block can have its own `_done`. The body lands in the
+generated file byte-for-byte verbatim. The leading underscore is a style
+convention that marks a label as local at a glance — any plain label gets
+the same block-local scope.
 
 Block bodies fall through — do not end them with `ret`. The generated
 wrapper appends the change-flag bookkeeping and the `ret`.

@@ -64,6 +64,6 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@jhlagado/azm": "^0.2.16"
+    "@jhlagado/azm": "^0.2.17"
   }
 }
