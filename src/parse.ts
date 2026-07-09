@@ -552,6 +552,8 @@ export function parseUnit(
       }
 
       // Body lines are verbatim until a line containing only "end".
+      // The first body line's source position anchors the debug map.
+      const bodyLine = i + 1;
       const body: string[] = [];
       let sawEnd = false;
       while (i < lines.length) {
@@ -587,7 +589,7 @@ export function parseUnit(
         );
         continue;
       }
-      effects.push({ name, phase, depends, updates, body, line: lineNo });
+      effects.push({ name, phase, depends, updates, body, line: lineNo, bodyLine });
       continue;
     }
 
@@ -648,6 +650,12 @@ export function assembleProgram(units: ParsedUnit[]): ParseResult {
         (merged[key] as object[]).push(decl);
       }
     }
+  }
+  // Blocks carry their declaring file into the model: the debug-map
+  // rewrite attributes generated body lines back to the right .glim file.
+  for (const effect of merged.effects) {
+    const file = fileOf.get(effect);
+    if (file !== undefined) effect.file = file;
   }
   const error = (owner: { line: number } | number, message: string): void => {
     if (typeof owner === 'number') {

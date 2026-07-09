@@ -24,15 +24,27 @@ single, readable AZM source file. By default, the CLI also runs AZM in register
 contract mode and injects AZM's inferred `;!` contracts into that file.
 Skip that with `--no-check` when you only want generation.
 
-Assemble the generated file with AZM when you want HEX, binary, and a
-Debug80 map:
+When you want the whole toolchain in one step — HEX, binary, and a
+Debug80 map — use `build`:
+
+```sh
+node dist/src/cli.js build examples/counter.glim
+```
+
+This generates the AZM, injects contracts, assembles with AZM, and then
+rewrites the `.d8.json` Debug80 map so lines inside your `begin`/`end`
+block bodies are attributed to the `.glim` file itself: a breakpoint set
+in Glimmer source resolves, and stepping through your own code stays in
+the `.glim` file. Generated glue (dispatch, timers, the profile library)
+stays attributed to the generated `.asm` — stepping into it drops you
+into readable assembly, which is the transparency principle at work.
+
+You can still assemble manually when you prefer — the generated AZM is
+an ordinary AZM program:
 
 ```sh
 npx azm examples/counter.main.asm
 ```
-
-This produces Intel HEX, a flat binary, and a `.d8.json` Debug80 map, so
-the program can run and be debugged source-level in Debug80.
 
 The `;!` comments above each routine are register contracts — each
 routine's true register effects, inferred and injected by AZM as part

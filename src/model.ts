@@ -125,6 +125,10 @@ export interface EffectDecl {
   /** Raw Z80 body lines, verbatim between begin/end. */
   body: string[];
   line: number;
+  /** 1-based source line of the first body line (the line after `begin`). */
+  bodyLine: number;
+  /** Source file the block was declared in (set when units are merged). */
+  file?: string;
 }
 
 export interface GlimmerProgram {

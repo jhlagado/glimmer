@@ -24,6 +24,18 @@ The CLI (`src/cli.ts`) wraps `compileToAzm`, prints diagnostics as
 packaged AZM CLI with contract inference enabled and writes AZM's inferred
 `;!` register contracts back into that file.
 
+`glimmer build <entry.glim>` continues past generation: a second AZM pass
+assembles the annotated file into `.hex`, `.bin`, and `.d8.json` (the
+second pass matters — contract injection edits the file, so a map from
+the first pass would be offset by the injected `;!` lines), and
+`src/build.ts` then rewrites the map. `computeBlockMappings` anchors each
+block at its `@Glim_<Name>:` label in the final asm text and verifies the
+body is byte-for-byte verbatim; `rewriteD8Map` moves the matching
+segments onto the `.glim` file (entry or part, from `EffectDecl.file` and
+`bodyLine`) so Debug80 steps block bodies in Glimmer source while
+generated glue stays on the generated asm. Blocks that fail verification
+are skipped with a warning, never mapped wrongly.
+
 ## The program model
 
 `src/model.ts` defines the model the parser produces and the generator
@@ -86,11 +98,13 @@ Notable constraints the generator honours:
 - **Change-flag banks.** States, then pulses, then ramps, then
   `FrameCount` when used are assigned into up to four 8-bit banks, at most
   32 flag-carrying cells; exceeding it is a diagnostic, not a truncation.
-- **Block-local labels.** `_done` style labels are rewritten to
-  globally unique labels (`Glim_ApplyIncrement_done`) by
-  `namespaceLocalLabels`, which only rewrites names actually defined in
-  the block. `$` is never used in generated names: it is AZM's
-  current-address operator and hex prefix, not label syntax.
+- **Block-local labels.** Bodies are emitted byte-for-byte verbatim.
+  AZM (>= 0.2.17) scopes plain labels to the enclosing `@` routine, so
+  every block can define its own `_done` with no rewriting — the `_`
+  prefix is a style convention, not semantics. Verbatim bodies are part
+  of the label-anchored source-mapping contract. `$` is never used in
+  generated names: it is AZM's current-address operator and hex prefix,
+  not label syntax.
 - **Fall-through bodies.** Block bodies must not `ret`; the generated
   wrapper appends `updates` change-marking and the final `ret`.
 - **Register contracts are AZM's job.** Every generated routine is a

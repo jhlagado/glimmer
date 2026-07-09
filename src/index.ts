@@ -35,6 +35,13 @@ export {
 } from './parse.js';
 export { loadGlimmerProgram, type LoadOptions } from './load.js';
 export { generateAzm, type GenerateOptions, type GenerateResult } from './generate.js';
+export {
+  computeBlockMappings,
+  rewriteD8Map,
+  type BlockLineMapping,
+  type BlockMappingsResult,
+  type D8Map,
+} from './build.js';
 
 import type { GlimmerDiagnostic } from './model.js';
 import { generateAzm, type GenerateOptions } from './generate.js';

@@ -9,12 +9,13 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 
 import type { GlimmerProgram } from './model.js';
+import { computeBlockMappings, rewriteD8Map, type D8Map } from './build.js';
 import { generateAzm } from './generate.js';
 import { loadGlimmerProgram } from './load.js';
 import { parseNumber } from './parse.js';
@@ -24,11 +25,16 @@ const require = createRequire(import.meta.url);
 function usage(): string {
   return [
     'Usage: glimmer [options] <entry.glim>',
+    '       glimmer build [options] <entry.glim>',
+    '',
+    'The default command compiles .glim to a generated AZM source file.',
+    'build also assembles it with AZM (.hex, .bin, .d8.json) and rewrites',
+    'the Debug80 map so block-body lines step in the .glim source.',
     '',
     'Options:',
     '  -o, --output <file>   Output AZM path (default: <entry>.main.asm, the Debug80 entry-point convention)',
     '  --org <addr>          Assembly origin, e.g. $4000 (default: $4000)',
-    '  --no-check            Skip the AZM contract-inject/check step',
+    '  --no-check            Skip the AZM contract-inject/check step (not with build)',
     '  --deps                Print the dependency report (writers/readers per cell) and exit',
     '  -V, --version         Print package version',
     '  -h, --help            Print this help',
@@ -51,6 +57,55 @@ function annotateAndCheck(outPath: string, isTec1g: boolean): number {
   if (run.stdout) process.stdout.write(run.stdout);
   if (run.stderr) process.stderr.write(run.stderr);
   return run.status ?? 1;
+}
+
+/**
+ * Assemble the final annotated file into .hex/.bin/.d8.json. This is a
+ * second AZM pass: contract injection edits the file on disk, so the map
+ * must be produced from the file as it now stands or its line numbers
+ * would be offset by the injected ;! lines.
+ */
+function assembleArtifacts(outPath: string): number {
+  const azmCli = require.resolve('@jhlagado/azm/cli');
+  const run = spawnSync(process.execPath, [azmCli, outPath], { encoding: 'utf8' });
+  if (run.status !== 0) {
+    if (run.stdout) process.stdout.write(run.stdout);
+    if (run.stderr) process.stderr.write(run.stderr);
+  }
+  return run.status ?? 1;
+}
+
+/**
+ * Rewrite the emitted .d8.json so segments inside block bodies step in
+ * the .glim source while generated glue stays on the generated asm.
+ */
+function rewriteDebugMap(outPath: string, entry: string, program: GlimmerProgram): number {
+  const d8Path = outPath.replace(/\.asm$/, '.d8.json');
+  const outDir = path.dirname(outPath);
+  const entryDir = path.dirname(entry);
+  const asmKey = path.basename(outPath);
+
+  const asmText = readFileSync(outPath, 'utf8');
+  const glimFileKey = (declared: string | undefined): string =>
+    path.relative(outDir, path.resolve(entryDir, declared ?? path.basename(entry))) ||
+    path.basename(entry);
+  const { mappings, warnings } = computeBlockMappings(
+    asmText,
+    program.effects,
+    path.basename(entry),
+    glimFileKey,
+  );
+  for (const warning of warnings) {
+    console.error(`warning: ${warning}`);
+  }
+
+  const map = JSON.parse(readFileSync(d8Path, 'utf8')) as D8Map;
+  const { moved } = rewriteD8Map(map, asmKey, mappings);
+  writeFileSync(d8Path, `${JSON.stringify(map, null, 2)}\n`);
+  console.log(
+    `Wrote ${d8Path} (${moved} block segment${moved === 1 ? '' : 's'} attributed to .glim source)`,
+  );
+  return 0;
 }
 
 /**
@@ -99,6 +154,12 @@ export function main(argv: string[]): number {
   let org: number | undefined;
   let check = true;
   let deps = false;
+  let build = false;
+
+  if (argv[0] === 'build') {
+    build = true;
+    argv = argv.slice(1);
+  }
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i] as string;
@@ -152,6 +213,10 @@ export function main(argv: string[]): number {
     console.error(usage());
     return 1;
   }
+  if (build && !check) {
+    console.error('build always runs the AZM check; --no-check is not supported with build.');
+    return 1;
+  }
 
   const loaded = loadGlimmerProgram(entry);
   if (loaded.program === null) {
@@ -198,7 +263,16 @@ export function main(argv: string[]): number {
       return status;
     }
     console.log(`Wrote ${outPath} (register contracts injected by AZM)`);
-    return 0;
+    if (!build) return 0;
+
+    // build: assemble the annotated file (hex/bin/d8.json), then point
+    // block-body map segments back at the .glim source.
+    const assembleStatus = assembleArtifacts(outPath);
+    if (assembleStatus !== 0) {
+      console.error(`AZM assembly failed for ${outPath}.`);
+      return assembleStatus;
+    }
+    return rewriteDebugMap(outPath, entry, loaded.program);
   }
   console.log(`Wrote ${outPath}`);
   return 0;

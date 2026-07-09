@@ -21,14 +21,17 @@ or change purpose.
 | `parse.ts`    | Line-oriented `.glim` parser and reference validation                               |
 | `generate.ts` | AZM generator: equates, storage, runtime loop, polling, dispatch, wrappers, cleanup |
 | `index.ts`    | Public API: re-exports plus `compileToAzm`                                          |
-| `cli.ts`      | `glimmer <entry.glim> [-o out.asm] [--org <addr>]`                                  |
+| `build.ts`    | `glimmer build` debug-map rewrite: anchors block bodies at `@Glim_*` labels, re-attributes `.d8.json` segments to `.glim` source |
+| `cli.ts`      | `glimmer <entry.glim> [-o out.asm] [--org <addr>]`; `glimmer build` adds AZM assembly + the map rewrite |
 
 ## test/
 
 | File               | Purpose                                                         |
 | ------------------ | --------------------------------------------------------------- |
 | `parse.test.ts`    | Grammar and validation diagnostics                              |
-| `generate.test.ts` | Generated structure, label namespacing, AZM assembly round trip |
+| `load.test.ts`     | Multi-file loading: parts, imports, file-tagged diagnostics     |
+| `generate.test.ts` | Generated structure, verbatim bodies, AZM assembly round trip   |
+| `build.test.ts`    | `glimmer build`: d8 map rewrite to `.glim` source (entry + part) |
 
 ## examples/
 

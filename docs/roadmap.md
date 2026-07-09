@@ -18,11 +18,11 @@ build task, or Debug80 itself) runs `azm counter.main.asm` and gets `.hex`,
 canonical interface also serves the transparency principle: the user can
 always read what Glimmer wrote.
 
-Invoking AZM from Glimmer is a _convenience_, not a requirement, and it is
-nearly free when we want it: `@jhlagado/azm` exposes a programmatic compile
-API, it is already a dependency of this repo, and the test suite already
-calls it. A `glimmer build` that goes glim → asm → hex/bin/d8 is roughly an
-afternoon of work whenever it becomes worth having.
+Invoking AZM from Glimmer is a _convenience_, not a requirement, and
+`glimmer build` (landed 2026-07-09) provides it: glim → annotated asm →
+`.hex`/`.bin`/`.d8.json` in one command, with the debug map rewritten so
+block-body lines step in `.glim` source. The plain `glimmer` command still
+stops at generated AZM, which remains the canonical interface.
 
 The long-term exception: source-level debugging of `.glim` files in Debug80
 will eventually need a Glimmer-level map (glim line ↔ generated asm line),
@@ -145,11 +145,12 @@ runs at most once per frame; the frame is a single forward pass; frame
 cost is bounded by effect count — no within-frame circularity is
 possible by construction.
 
-**Lint backlog.** A plain (non-underscore) label defined inside a block
-passes through verbatim and is global — two blocks defining `Loop:`
-collide at assembly with an error pointing at generated code. Add a
-Glimmer diagnostic suggesting `_loop`. Likewise the planned
-"body updates a declared cell not listed in `updates`" warning.
+**Lint backlog.** ~~Plain labels inside blocks collide globally~~ —
+resolved upstream 2026-07-09: AZM 0.2.17 scopes plain labels to their
+enclosing `@` routine, so block labels are local by construction and
+Glimmer's `_label` renaming was removed (bodies are now byte-for-byte
+verbatim). Still open: the "body updates a declared cell not listed in
+`updates`" warning.
 
 **Matrix runtime. ✅ Landed 2026-07-07.**
 `held period N` bindings (first press fires, then autorepeats;
@@ -210,10 +211,10 @@ next milestones:
 - **Structured-data evidence (v0.5):** the `Body + index` address
   arithmetic repeats five times across the game and its library; AZM
   layout types would name it once.
-- **AZM profile gap:** the mon3 register-contract profile models calls
-  13-16, 18, 54 but not 49 (`_random`: out A, destroys B) — snake mixes
-  game state for food placement instead. A one-entry addition to AZM's
-  profiles.ts unlocks the real call.
+- **AZM profile gap:** ~~the mon3 profile did not model call 49~~ —
+  closed 2026-07-09: AZM 0.2.17 models `_random` (out A, destroys B),
+  the generator emits `ApiRandom .equ 49`, and snake's food placement
+  uses the real call.
 - The contract pipeline caught two genuine bugs while writing snake: a
   `jr` past the ±128 range in the long step block, and the
   read-after-RST liveness issue above. The checked build earns its
@@ -230,10 +231,16 @@ These are the items that still matter before drawing the line:
    and `.d8.json` examples are current. `debug80.json` points at useful
    targets. The first-publish docs explain how to build and run through
    Debug80.
-3. **D8/Glim source mapping, first cut.** Keep this small: either
-   document the current generated-AZM stepping workflow clearly, or add a
-   minimal `glimmer build`/map rewrite if it is genuinely quick. Do not
-   block publication on perfect source-level `.glim` stepping.
+3. **D8/Glim source mapping, first cut. ✅ Landed 2026-07-09.**
+   `glimmer build <entry.glim>` generates, injects contracts, assembles
+   (`.hex`/`.bin`/`.d8.json`), and rewrites the map (Option A): segments
+   inside block bodies are re-attributed to their `.glim` file (entry or
+   part) using the label-anchored contract — `@Glim_<Name>:` plus
+   byte-for-byte verbatim bodies — while generated glue stays attributed
+   to the generated `.asm`. Assembly runs as a second AZM pass over the
+   annotated file so map lines match the file on disk (a single
+   `--contracts` pass would produce a map offset by the injected `;!`
+   lines — worth fixing in AZM eventually).
 4. **Docs winnow.** The manual and roadmap describe the shipped core.
    TMS9918, Tetro/Pacmo, cards, structured data, libraries, and richer
    resources move to post-publish tracks.
@@ -252,9 +259,11 @@ These are important, but they are no longer blockers:
 - **Structured data via AZM layouts.** Byte arrays stay simple. Future
   structured state should use AZM Book 0 layout types: `.type`,
   `.typealias`, typed `.ds`, `sizeof`, and `offset`.
-- **Better `.glim` debug maps.** `glimmer build` can invoke AZM's compile
-  API and rewrite `.d8.json` segments so user block lines step in the
-  `.glim` file while generated glue remains visible in generated AZM.
+- **Better `.glim` debug maps.** The first cut landed with
+  `glimmer build` (see above). Remaining depth: a `.glim` TextMate
+  grammar in Debug80, native `.glim` targets in debug80.json, and the
+  AZM `.loc`-style source-origin directive (Option B) once the UX has
+  proven itself.
 - **Generated-output module splitting.** Move stable generated sections
   toward AZM `.import` modules when file layout and debugging tradeoffs
   are clear.
@@ -341,15 +350,18 @@ it needs address segments attributed to `counter.glim` lines instead of
 
 **3. Producing glim-attributed maps — three options.**
 
-- **Option A — Glimmer composes (recommended first).** `glimmer build`
-  compiles `.glim` → `.asm`, invokes AZM's programmatic compile API, then
-  rewrites the resulting map: Glimmer knows exactly which generated asm
-  lines came from which `.glim` lines (it wrote them), so segments inside
-  user blocks are re-attributed to the `.glim` file, while generated
-  glue stays attributed to the `.asm`. No changes to AZM or Debug80's map
-  reader; stepping lands in `.glim` for user code and drops into readable
-  generated AZM for glue — which is the transparency principle working
-  as intended.
+- **Option A — Glimmer composes. ✅ Implemented 2026-07-09 as
+  `glimmer build`** (`src/build.ts`). Compiles `.glim` → `.asm`, runs AZM
+  (contract injection, then a second pass over the annotated file for
+  `.hex`/`.bin`/`.d8.json`), then rewrites the map: segments inside user
+  blocks are re-attributed to the `.glim` file (entry or part), while
+  generated glue stays attributed to the `.asm`. The anchor is Option D's
+  contract — `@Glim_<Name>:` labels plus byte-for-byte verbatim bodies —
+  with each body text-verified before mapping, so a drifted block is
+  skipped with a warning rather than mapped wrongly. No changes to AZM or
+  Debug80's map reader; stepping lands in `.glim` for user code and drops
+  into readable generated AZM for glue — the transparency principle
+  working as intended.
 - **Option B — AZM gains a source-origin directive (durable mechanism).**
   A `#line`-style directive (e.g. `.loc "tetro.glim" 42`) in generated
   source, honoured by AZM's map writer, would let AZM emit correctly
@@ -362,17 +374,17 @@ it needs address segments attributed to `counter.glim` lines instead of
   least aligned with the existing architecture; not recommended.
 - **Option D — label-anchored mapping (no new artifacts).** The generated
   naming convention is itself debug information. Every effect's code
-  begins at `Glim_<Effect>:`, the `.d8.json` map records symbols with
+  begins at `@Glim_<Effect>:`, the `.d8.json` map records symbols with
   addresses, and block bodies are copied into the generated file
-  verbatim, line for line (local-label renaming changes text, never line
-  count). So a tool holding the `.glim`, the generated `.asm`, and the
-  `.d8.json` can reconstruct the full mapping with zero extra metadata:
-  the symbol gives the block's start, and body line k after the label
-  corresponds to body line k after `begin`. Block-level mapping
-  ("which effect is the PC in?") needs only the `.d8.json` and the
-  convention. This depends on two promises the generator now makes —
-  stable `Glim_*` naming and verbatim, line-preserving bodies — which
-  should be treated as a contract once anything relies on them.
+  byte-for-byte verbatim (since AZM 0.2.17 scopes labels to `@` routines,
+  no renaming happens at all). So a tool holding the `.glim`, the
+  generated `.asm`, and the `.d8.json` can reconstruct the full mapping
+  with zero extra metadata: the symbol gives the block's start, and body
+  line k after the label corresponds to body line k after `begin`.
+  Block-level mapping ("which effect is the PC in?") needs only the
+  `.d8.json` and the convention. This depends on two promises the
+  generator now makes — stable `Glim_*` naming and verbatim bodies —
+  which should be treated as a contract once anything relies on them.
 
 The build-orchestration question ("how does Debug80 know to run Glimmer?")
 starts simple: a debug80.json target's `sourceFile` points at the
