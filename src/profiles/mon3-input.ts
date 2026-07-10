@@ -28,6 +28,53 @@ export function emitMon3KeyCodeEquates(
   }
 }
 
+/** LCD equates, string data, and the lcd_row op — emitted when the
+ * program declares text resources. The LCD is board hardware, shared
+ * by every TEC-1G display profile. */
+export function emitMon3LcdEquates(emit: (line?: string) => void): void {
+  emit('; --- MON-3 LCD (board hardware) ---');
+  emit(`${'ApiStringToLcd'.padEnd(17)} .equ 13   ; HL = string; destroys A,HL`);
+  emit(`${'ApiCharToLcd'.padEnd(17)} .equ 14   ; A = character`);
+  emit(`${'ApiCommandToLcd'.padEnd(17)} .equ 15   ; B = instruction byte`);
+  emit(`${'LcdRow1'.padEnd(17)} .equ $80`);
+  emit(`${'LcdRow2'.padEnd(17)} .equ $C0`);
+  emit(`${'LcdRow3'.padEnd(17)} .equ $94`);
+  emit(`${'LcdRow4'.padEnd(17)} .equ $D4`);
+  emit();
+}
+
+export function emitMon3TextData(
+  program: GlimmerProgram,
+  emit: (line?: string) => void,
+  op: (text: string) => void,
+): void {
+  if (program.texts.length === 0) return;
+  emit('; --- text resources (zero-terminated LCD strings) ---');
+  for (const text of program.texts) {
+    emit(`${text.name}:`);
+    op(`.db     "${text.value}", 0`);
+  }
+  emit();
+}
+
+export function emitMon3LcdOps(
+  program: GlimmerProgram,
+  emit: (line?: string) => void,
+  op: (text: string) => void,
+): void {
+  if (program.texts.length === 0) return;
+  emit();
+  emit('; Position the LCD cursor at a row command, then write a string.');
+  emit('op lcd_row(msg imm16, row imm8)');
+  op('ld      b,row');
+  op('ld      c,ApiCommandToLcd');
+  op('rst     $10');
+  op('ld      hl,msg');
+  op('ld      c,ApiStringToLcd');
+  op('rst     $10');
+  emit('end');
+}
+
 export function emitMon3HeldStorage(
   emit: (line?: string) => void,
   heldBindings: Binding[],
@@ -77,7 +124,7 @@ export function emitTec1gPollBindings(
     op('ld      (Glim_HeldCount),a');
     op('ret     nz');
     for (const binding of program.bindings) {
-      if (binding.edge !== 'held') continue;
+      if (binding.edge !== 'held' || binding.key === 'any') continue;
       const tag = `${binding.target}_${binding.key}`;
       op('ld      a,b');
       op(`cp      ${binding.key}`);
@@ -98,6 +145,14 @@ export function emitTec1gPollBindings(
     op('ld      b,a                  ; B = key code (DE unsafe: matrix kbd)');
   }
   for (const binding of program.bindings) {
+    if (binding.key !== 'any') continue;
+    // any-key fires on every new press, alongside any named binding.
+    op(`ld      a,1                  ; any key`);
+    op(`ld      (${binding.target}),a`);
+    raiseChanged(binding.target);
+  }
+  for (const binding of program.bindings) {
+    if (binding.key === 'any') continue;
     const tag = `${binding.target}_${binding.key}`;
     op('ld      a,b');
     op(`cp      ${binding.key}`);

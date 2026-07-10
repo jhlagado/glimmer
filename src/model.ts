@@ -177,6 +177,13 @@ export interface TileDecl {
   line: number;
 }
 
+/** LCD text resource: a zero-terminated string with a name (TEC-1G board LCD). */
+export interface TextDecl {
+  name: string;
+  value: string;
+  line: number;
+}
+
 export type CurvePreset =
   'linear' | 'ease_in' | 'ease_out' | 'ease_in_out' | 'sine' | 'overshoot' | 'anticipation';
 
@@ -274,6 +281,7 @@ export interface GlimmerProgram {
   shapes: ShapeDecl[];
   sprites: SpriteDecl[];
   tiles: TileDecl[];
+  texts: TextDecl[];
   bindings: Binding[];
   effects: EffectDecl[];
   routines: RoutineDecl[];

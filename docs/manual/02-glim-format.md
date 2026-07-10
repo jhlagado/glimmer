@@ -191,6 +191,33 @@ directly under `updates CurrentCard` — `goto` is the unconditional
 sugar, the conditional form is an ordinary conditional store of a
 `Card.` enum value (see Tetro's blocked-spawn game-over).
 
+## text and lcd_row
+
+```
+text MsgPaused "PAUSED"
+```
+
+A zero-terminated string for the TEC-1G's LCD — board hardware, so it
+works on both displays. The generated `lcd_row` op positions the cursor
+and writes it through the MON-3 calls:
+
+```asm
+lcd_row MsgPaused, LcdRow1
+```
+
+`LcdRow1`..`LcdRow4` and the `ApiStringToLcd`/`ApiCharToLcd`/
+`ApiCommandToLcd` equates are emitted alongside.
+
+## bind key any
+
+```
+bind key any rising -> AnyKey
+```
+
+Fires the pulse on every new key press — the "press any key" pattern.
+Rising only (there is no single key to autorepeat), TEC-1G only, and it
+fires alongside any named binding the same press matches.
+
 ## part and import
 
 ```

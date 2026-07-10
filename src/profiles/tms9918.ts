@@ -88,6 +88,9 @@ import {
   emitMon3ApiEquates,
   emitMon3HeldStorage,
   emitMon3KeyCodeEquates,
+  emitMon3LcdEquates,
+  emitMon3LcdOps,
+  emitMon3TextData,
   emitTec1gPollBindings,
 } from './mon3-input.js';
 
@@ -137,6 +140,9 @@ export const tec1gTms9918Profile: Profile = {
       emit(`${name.padEnd(17)} .equ ${value}`);
     }
     emit();
+    if (program.texts.length > 0) {
+      emitMon3LcdEquates(emit);
+    }
     emitMon3KeyCodeEquates(program, emit);
   },
   emitInputStorage({ emit, heldBindings }: ProfileContext): void {
@@ -149,6 +155,7 @@ export const tec1gTms9918Profile: Profile = {
     emit(`${'SpriteDirty:'.padEnd(17)} .db 0`);
   },
   emitDataTables({ program, emit, op }: ProfileContext): void {
+    emitMon3TextData(program, emit, op);
     emitVdpResourceTables(program, emit, op);
     emit('; --- VDP register init (value, then index|$80, via the control port) ---');
     emit('VdpRegInitTbl:');
@@ -182,6 +189,7 @@ export const tec1gTms9918Profile: Profile = {
       emit();
       emitVdpResourceRuntime(program, emit, op);
     }
+    emitMon3LcdOps(program, emit, op);
   },
 };
 

@@ -92,6 +92,7 @@ statement       ::= program-decl
                   | shape-decl
                   | sprite-decl
                   | tile-decl
+                  | text-decl
                   | bind-decl
                   | block-decl
                   | routine-decl
@@ -139,10 +140,18 @@ array-type      ::= "byte" "[" number "]"
 
 pulse-decl      ::= "pulse" identifier
 
+text-decl       ::= "text" identifier string
+                  ; tec1g platform (any display): a zero-terminated LCD
+                  ; string. The generated lcd_row op positions the
+                  ; cursor and writes it: lcd_row Msg, LcdRow1. LcdRow1..4
+                  ; and the MON-3 LCD call equates come with it.
+
 bind-decl       ::= "bind" "key" key-name trigger "->" identifier
 trigger         ::= "rising"
                   | "held" "period" number          ; tec1g-mon3 only
-key-name        ::= identifier                      ; validated per platform
+key-name        ::= identifier | "any"              ; validated per platform;
+                                                    ; any = every new press,
+                                                    ; rising only, tec1g
 
 timer-decl      ::= "timer" identifier ":" cell-type "=" number
                     "->" identifier ( "once" )?

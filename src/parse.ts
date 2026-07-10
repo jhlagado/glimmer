@@ -41,6 +41,7 @@ import type {
   SoundDecl,
   SpriteDecl,
   StateDecl,
+  TextDecl,
   TileDecl,
   TimerDecl,
   TypeDecl,
@@ -87,6 +88,7 @@ const SHAPE_COLORS: readonly ShapeColor[] = [
   'magenta',
   'white',
 ];
+const TEXT_RE = /^text\s+([A-Za-z_][A-Za-z0-9_]*)\s+"([^"]*)"$/;
 const SPRITE_RE = /^sprite\s+([A-Za-z_][A-Za-z0-9_]*)\s+color\s+([A-Za-z_][A-Za-z0-9_]*)$/;
 const TILE_RE =
   /^tile\s+([A-Za-z_][A-Za-z0-9_]*)\s+color\s+([A-Za-z_][A-Za-z0-9_]*)\s+on\s+([A-Za-z_][A-Za-z0-9_]*)$/;
@@ -152,6 +154,7 @@ export interface ParsedUnit {
   shapes: ShapeDecl[];
   sprites: SpriteDecl[];
   tiles: TileDecl[];
+  texts: TextDecl[];
   bindings: Binding[];
   effects: EffectDecl[];
   routines: RoutineDecl[];
@@ -192,6 +195,7 @@ export function parseUnit(
   const shapes: ShapeDecl[] = [];
   const sprites: SpriteDecl[] = [];
   const tiles: TileDecl[] = [];
+  const texts: TextDecl[] = [];
   const bindings: Binding[] = [];
   const effects: EffectDecl[] = [];
   const routines: RoutineDecl[] = [];
@@ -516,6 +520,16 @@ export function parseUnit(
         continue;
       }
       curves.push({ name, preset: preset as CurvePreset, steps, from, to, line: lineNo });
+      continue;
+    }
+
+    if (text.startsWith('text ')) {
+      const match = TEXT_RE.exec(text);
+      if (!match) {
+        error(lineNo, `Invalid text declaration: "${text}". Expected: text <Name> "STRING".`);
+        continue;
+      }
+      texts.push({ name: match[1] as string, value: match[2] as string, line: lineNo });
       continue;
     }
 
@@ -965,6 +979,7 @@ export function parseUnit(
     shapes,
     sprites,
     tiles,
+    texts,
     bindings,
     effects,
     routines,
@@ -998,6 +1013,7 @@ export function assembleProgram(units: ParsedUnit[]): ParseResult {
     shapes: [] as ShapeDecl[],
     sprites: [] as SpriteDecl[],
     tiles: [] as TileDecl[],
+    texts: [] as TextDecl[],
     bindings: [] as Binding[],
     effects: [] as EffectDecl[],
     routines: [] as RoutineDecl[],
@@ -1061,6 +1077,12 @@ export function assembleProgram(units: ParsedUnit[]): ParseResult {
   }
   if (platform === 'tec1g-mon3') {
     for (const binding of merged.bindings) {
+      if (binding.key === 'any') {
+        if (binding.edge === 'held') {
+          error(binding, 'bind key any supports rising only: "any" has no single key to autorepeat.');
+        }
+        continue;
+      }
       if (!TEC1G_KEY_CODES.has(binding.key)) {
         error(
           binding,
@@ -1072,6 +1094,9 @@ export function assembleProgram(units: ParsedUnit[]): ParseResult {
     for (const binding of merged.bindings) {
       if (binding.edge === 'held') {
         error(binding, 'Held bindings require platform tec1g-mon3.');
+      }
+      if (binding.key === 'any') {
+        error(binding, 'bind key any requires platform tec1g-mon3.');
       }
     }
   }
@@ -1091,6 +1116,11 @@ export function assembleProgram(units: ParsedUnit[]): ParseResult {
   ) {
     for (const decl of [...merged.sprites, ...merged.tiles]) {
       error(decl, 'Sprite and tile resources require platform tec1g-mon3 with display tms9918.');
+    }
+  }
+  if (merged.texts.length > 0 && platform !== 'tec1g-mon3') {
+    for (const textDecl of merged.texts) {
+      error(textDecl, 'Text resources require platform tec1g-mon3 (the board LCD).');
     }
   }
   if (merged.sprites.length > 31) {
@@ -1150,6 +1180,7 @@ function validateReferences(
     | 'shapes'
     | 'sprites'
     | 'tiles'
+    | 'texts'
     | 'bindings'
     | 'effects'
     | 'routines'
@@ -1203,6 +1234,7 @@ function validateReferences(
   for (const shape of parts.shapes) declare(shape, shape.name, 'shape');
   for (const sprite of parts.sprites) declare(sprite, sprite.name, 'sprite');
   for (const tile of parts.tiles) declare(tile, tile.name, 'tile');
+  for (const textDecl of parts.texts) declare(textDecl, textDecl.name, 'text');
   for (const effect of parts.effects) declare(effect, effect.name, 'effect');
   for (const routine of parts.routines) declare(routine, routine.name, 'routine');
 
@@ -1452,6 +1484,13 @@ const RESERVED_NAMES = new Set([
   'ScanDwellPeriod',
   'ApiScanKeys',
   'ApiRandom',
+  'ApiStringToLcd',
+  'ApiCharToLcd',
+  'ApiCommandToLcd',
+  'LcdRow1',
+  'LcdRow2',
+  'LcdRow3',
+  'LcdRow4',
   'PortRow',
   'PortRed',
   'PortGreen',

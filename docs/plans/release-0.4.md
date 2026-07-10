@@ -91,7 +91,7 @@ The sketch's `sprite Name color <vc>` and `tile Name color <fg> on
   LoadResourcesVram, and colour groups spill to a new group when full
   rather than erroring (31-sprite limit is a diagnostic).
 
-## 4. Text resources and the LCD slice
+## 4. Text resources and the LCD slice — ✅ landed 2026-07-11
 
 `text MsgPaused "PAUSED"` emits the null-terminated `.db` string. The
 tec1g platform (both displays — the LCD is board hardware, not display
@@ -100,7 +100,7 @@ contract profile already models (`_stringToLcd` 13, `_charToLcd` 14,
 `_commandToLcd` 15): an `lcd_row msg, row` op and LcdRow equates.
 Corpus LCD script tables stay out — ops compose in bodies.
 
-## 5. `bind key any rising -> Pulse`
+## 5. `bind key any rising -> Pulse` — ✅ landed 2026-07-11
 
 The corpus "press any key" pattern (splash exit, game-over restart),
 currently approximated with GO. Matrix and VDP profiles share the

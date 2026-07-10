@@ -13,6 +13,9 @@ import {
   emitMon3ApiEquates,
   emitMon3HeldStorage,
   emitMon3KeyCodeEquates,
+  emitMon3LcdEquates,
+  emitMon3LcdOps,
+  emitMon3TextData,
   emitTec1gPollBindings,
 } from './mon3-input.js';
 import type { Profile, ProfileContext } from './types.js';
@@ -470,6 +473,9 @@ export const tec1gMatrixProfile: Profile = {
     emit(`${'COLOR_MAGENTA'.padEnd(17)} .equ COLOR_RED + COLOR_BLUE`);
     emit(`${'COLOR_WHITE'.padEnd(17)} .equ $07`);
     emit();
+    if (program.texts.length > 0) {
+      emitMon3LcdEquates(emit);
+    }
     emitMon3KeyCodeEquates(program, emit);
   },
   emitInputStorage({ emit, heldBindings }: ProfileContext): void {
@@ -497,6 +503,7 @@ export const tec1gMatrixProfile: Profile = {
     }
   },
   emitDataTables({ program, emit, op }: ProfileContext): void {
+    emitMon3TextData(program, emit, op);
     const plainShapes = program.shapes.filter((s) => s.rotations === undefined);
     const rotShapes = program.shapes.filter((s) => s.rotations !== undefined);
     if (plainShapes.length > 0) {
@@ -530,5 +537,6 @@ export const tec1gMatrixProfile: Profile = {
       emit,
       op,
     );
+    emitMon3LcdOps(program, emit, op);
   },
 };

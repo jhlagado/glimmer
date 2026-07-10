@@ -695,6 +695,39 @@ describe('parseGlimmer', () => {
     expect(bad(['shape D color red', '  "X"', '  rot1 "X"', 'end'])).toContain('declared in order');
   });
 
+  it('parses text resources and any-key bindings with platform gating', () => {
+    const ok = parseGlimmer(
+      [
+        'program P',
+        'platform tec1g-mon3',
+        'display matrix8x8',
+        'text Msg "HELLO"',
+        'pulse AnyKey',
+        'bind key any rising -> AnyKey',
+        'effect E',
+        '    on AnyKey',
+        'begin',
+        '    lcd_row Msg, LcdRow1',
+        'end',
+      ].join('\n'),
+    );
+    expect(ok.diagnostics).toEqual([]);
+    expect(ok.program?.texts[0]).toMatchObject({ name: 'Msg', value: 'HELLO' });
+    expect(ok.program?.bindings[0]?.key).toBe('any');
+
+    const bad = parseGlimmer(
+      [
+        'program P',
+        'text Msg "X"',
+        'pulse A',
+        'bind key any rising -> A',
+        'bind key any held period 2 -> A',
+      ].join('\n'),
+    ).diagnostics.map((d) => d.message).join('\n');
+    expect(bad).toContain('Text resources require platform tec1g-mon3');
+    expect(bad).toContain('bind key any requires platform tec1g-mon3');
+  });
+
   it('warns when a body writes a cell missing from updates', () => {
     const source = [
       'program P',

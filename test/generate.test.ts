@@ -653,6 +653,57 @@ describe('cards', () => {
   });
 });
 
+describe('text resources, lcd_row, and any-key', () => {
+  const lcdProgram = [
+    'program L',
+    'platform tec1g-mon3',
+    'display matrix8x8',
+    'text Msg "HI"',
+    'state S : byte',
+    'pulse AnyKey',
+    'pulse Go',
+    'bind key any rising -> AnyKey',
+    'bind key KEY_GO rising -> Go',
+    'effect Greet',
+    '    on AnyKey',
+    '    updates S',
+    'begin',
+    '    lcd_row Msg, LcdRow1',
+    '    ld a,1',
+    '    ld (S),a',
+    'end',
+  ].join('\n');
+
+  it('emits the string, the LCD equates, the op, and any-key raising', () => {
+    const { source, diagnostics } = compileToAzm(lcdProgram);
+    expect(diagnostics).toEqual([]);
+    expect(source).toContain('.db     "HI", 0');
+    expect(source).toContain('ApiStringToLcd    .equ 13');
+    expect(source).toContain('op lcd_row(msg imm16, row imm8)');
+    // any-key raises before named-key dispatch, without a ret.
+    const poll = source!.indexOf('@__PollBindings:');
+    const anyRaise = source!.indexOf('ld      (AnyKey),a', poll);
+    const named = source!.indexOf('cp      KEY_GO', poll);
+    expect(anyRaise).toBeGreaterThan(poll);
+    expect(anyRaise).toBeLessThan(named);
+  });
+
+  it('assembles with AZM under the mon3 contract profile', async () => {
+    const { source } = compileToAzm(lcdProgram);
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-lcd-'));
+    const entry = path.join(dir, 'lcd.asm');
+    writeFileSync(entry, source!);
+    const assembled = await compile(entry, {
+      emitBin: true,
+      emitHex: false,
+      emitD8m: false,
+      registerContracts: 'error',
+      registerContractsProfile: 'mon3',
+    });
+    expect(assembled.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+  });
+});
+
 describe('AZM round trip', () => {
   it('generated CounterToy source assembles cleanly with AZM', async () => {
     const result = compileToAzm(counterToy);
