@@ -137,6 +137,23 @@ export interface CurveDecl {
 /** Built-in cell: increments every frame; usable in `on` when needed. */
 export const FRAME_COUNT = 'FrameCount';
 
+/**
+ * Built-in cell holding the active card, present when a program
+ * declares cards. Writable (usually via `goto`), triggerable in `on`;
+ * its generated enum is `Card` (`Card.Splash`, ...).
+ */
+export const CURRENT_CARD = 'CurrentCard';
+
+/**
+ * A card: a screen/mode in the HyperCard sense — exactly one is active.
+ * A `card` line starts a section; blocks after it belong to that card
+ * until the next card line or end of file.
+ */
+export interface CardDecl {
+  name: string;
+  line: number;
+}
+
 export const PHASES = ['input', 'derive', 'logic', 'render', 'commit', 'cleanup'] as const;
 
 export type Phase = (typeof PHASES)[number];
@@ -160,6 +177,12 @@ export interface EffectDecl {
   bodyLine: number;
   /** Source file the block was declared in (set when units are merged). */
   file?: string;
+  /** Card whose section the block was declared in; dispatch is gated on it. */
+  card?: string;
+  /** True for `enter` blocks: runs once when CurrentCard becomes `card`. */
+  enter?: boolean;
+  /** Card transition after the block runs (`goto` in the header). */
+  goto?: string;
 }
 
 /**
@@ -196,6 +219,7 @@ export interface GlimmerProgram {
   bindings: Binding[];
   effects: EffectDecl[];
   routines: RoutineDecl[];
+  cards: CardDecl[];
   imports: ImportDecl[];
 }
 

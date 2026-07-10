@@ -549,6 +549,82 @@ describe('parseGlimmer', () => {
     expect(ok.program?.routines[0]).toMatchObject({ name: 'Clamp', bodyLine: 4 });
   });
 
+  it('parses card sections, enter blocks, and goto headers', () => {
+    const source = [
+      'program P',
+      'state Score : byte',
+      'pulse Go',
+      'bind key KEY_1 rising -> Go',
+      'effect Global',
+      '    on Go',
+      'begin',
+      '    nop',
+      'end',
+      'card Splash',
+      'effect Start',
+      '    on Go',
+      '    goto Playing',
+      'end',
+      'card Playing',
+      'enter SetupPlaying',
+      '    updates Score',
+      'begin',
+      '    xor a',
+      '    ld (Score),a',
+      'end',
+      'render Draw',
+      '    on Score',
+      'begin',
+      '    nop',
+      'end',
+    ].join('\n');
+    const { program, diagnostics } = parseGlimmer(source);
+    expect(diagnostics).toEqual([]);
+    expect(program?.cards.map((c) => c.name)).toEqual(['Splash', 'Playing']);
+    const byName = new Map(program!.effects.map((e) => [e.name, e]));
+    expect(byName.get('Global')?.card).toBeUndefined();
+    // Header-only routing block: goto with no begin, empty body.
+    expect(byName.get('Start')).toMatchObject({ card: 'Splash', goto: 'Playing', body: [] });
+    // goto folds into updates so dataflow machinery sees it.
+    expect(byName.get('Start')?.updates).toContain('CurrentCard');
+    // enter: card entry is the trigger.
+    expect(byName.get('SetupPlaying')).toMatchObject({ card: 'Playing', enter: true });
+    expect(byName.get('SetupPlaying')?.depends).toEqual(['CurrentCard']);
+    expect(byName.get('Draw')?.card).toBe('Playing');
+  });
+
+  it('rejects card misuse', () => {
+    const source = [
+      'program P',
+      'pulse Go',
+      'enter Early',
+      'begin',
+      'end',
+      'card Splash',
+      'effect Bad',
+      '    on Go',
+      '    goto Nowhere',
+      'end',
+      'enter WithOn',
+      '    on Go',
+      'begin',
+      'end',
+      'render Router',
+      '    on Go',
+      '    goto Splash',
+      'begin',
+      'end',
+      'state CurrentCard : byte',
+    ].join('\n');
+    const { diagnostics } = parseGlimmer(source);
+    const messages = diagnostics.map((d) => d.message).join('\n');
+    expect(messages).toContain('enter Early must be inside a card section');
+    expect(messages).toContain('goto target "Nowhere" is not a declared card');
+    expect(messages).toContain('enter WithOn takes no "on"');
+    expect(messages).toContain('render Router cannot goto');
+    expect(messages).toContain('Reserved name "CurrentCard"');
+  });
+
   it('rejects bad type declarations and typed-state misuse', () => {
     const source = [
       'program P',

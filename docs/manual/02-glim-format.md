@@ -147,6 +147,40 @@ generated file, with its register contract inferred and injected by AZM.
 Like block bodies, the body falls through — the generator appends the
 final `ret` — and conditional early returns are fine.
 
+## card, enter, and goto
+
+```
+card Splash
+
+effect Start
+    on GoPressed
+    goto Playing
+end
+
+card Playing
+
+enter SetupPlaying
+    updates Score
+begin
+    xor a
+    ld (Score),a
+end
+```
+
+A card is a screen or mode: exactly one is active. A `card` line starts
+a section — everything after it belongs to that card until the next
+`card` line or end of file; declarations before the first `card` are
+global. Blocks in a card's section run only while that card is active.
+
+Cards generate a `Card` enum and a built-in `CurrentCard` cell (legal in
+`on` and `updates`), starting at the first declared card. `enter` blocks
+run once on card entry — no `on` line; entry is the trigger — and before
+the card's other blocks. `goto Playing` in a block header switches card
+after the block runs; with `goto`, `begin` is optional, so a header-only
+routing block closes directly with `end`. The switch lands next frame
+when the router runs in the same phase as the card's blocks — the
+ordinary one-frame deferral of the change-flag machinery.
+
 ## part and import
 
 ```

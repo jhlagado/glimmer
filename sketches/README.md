@@ -23,7 +23,7 @@ that is a numbered format proposal, catalogued below and folded into the
 - **P2 — Array state.** `state BoardRows : byte[8]`. Change tracking stays
   per-cell (the whole array is one change flag); Tetro treats the board as
   one unit already.
-- **P3 — Cards.** `card Splash / Playing / GameOver` as first-class
+- **P3 — Cards** (landed 2026-07-10)**.** `card Splash / Playing / GameOver` as first-class
   modes (HyperCard sense: screens; exactly one active). A `card` line
   starts a **section** — everything after it belongs to that card until
   the next `card` line or end of file; there is no closing keyword, so

@@ -263,11 +263,13 @@ sequential.
 
 ## Remaining language milestones (in the 0.2 release)
 
-- **Cards and header-level navigation.** Cards are optional modal
-  sections for screens/modes. `goto Playing` belongs in the block header,
-  beside `on` and `updates`, and is unconditional once the block runs.
-  `begin` opens an optional verbatim AZM body, so header-only routing
-  blocks may close directly with `end`.
+- **Cards and header-level navigation. ✅ Landed 2026-07-10.** `card`
+  section lines; generated `Card` enum + built-in `CurrentCard` cell
+  (first card = start card, changed on frame one); card-gated dispatch;
+  `enter` blocks run once on entry, before the card's other blocks;
+  `goto` in block headers (body optional) folds into `updates
+  CurrentCard`, so rollover and the dependency report see the real
+  dataflow.
 - **Structured data via AZM layouts. ✅ Landed 2026-07-10.** `type`
   declarations compile to AZM Book 0 `.type` records (`type Name = Expr`
   to `.typealias`); typed state (`state Cursor : Point`,

@@ -560,6 +560,80 @@ describe('routines', () => {
   });
 });
 
+describe('cards', () => {
+  const cardProgram = [
+    'program Modal',
+    'state Score : byte',
+    'pulse Go',
+    'bind key KEY_1 rising -> Go',
+    'card Splash',
+    'effect Start',
+    '    on Go',
+    '    goto Playing',
+    'end',
+    'card Playing',
+    'enter SetupPlaying',
+    '    updates Score',
+    'begin',
+    '    xor a',
+    '    ld (Score),a',
+    'end',
+    'effect Advance',
+    '    on Go',
+    '    updates Score',
+    'begin',
+    '    ld hl,Score',
+    '    inc (hl)',
+    'end',
+    'render Draw',
+    '    on Score',
+    'begin',
+    '    ld a,(Score)',
+    'end',
+  ].join('\n');
+
+  it('emits the enum, the built-in cell, card gates, and goto transitions', () => {
+    const { source, diagnostics } = compileToAzm(cardProgram);
+    expect(diagnostics).toEqual([]);
+    // Enum and the built-in cell, starting in the first card, changed.
+    expect(source).toContain('Card              .enum Splash, Playing');
+    expect(source).toContain('CurrentCard:      .db Card.Splash   ; active card, starts changed');
+    expect(source).toContain('CHG_CURRENTCARD');
+    // Card gates in dispatch.
+    expect(source).toContain('cp      Card.Splash');
+    expect(source).toContain('cp      Card.Playing');
+    expect(source).toMatch(/cp {6}Card\.Splash\n {8}jr {6}nz,GlimSkip_Start/);
+    // goto: transition after the (empty) body.
+    expect(source).toMatch(/@Glim_Start:\n {8}ld {6}a,Card\.Playing {6}; goto Playing\n {8}ld {6}\(CurrentCard\),a/);
+    // Enter block gated on its card, triggered by CurrentCard's flag.
+    expect(source).toContain('; --- enter block SetupPlaying ---');
+  });
+
+  it('dispatches enter blocks before other effects in their phase', () => {
+    const { source } = compileToAzm(cardProgram);
+    const dispatch = source!.indexOf('@__RunLogicEffects:');
+    const setup = source!.indexOf('GlimSkip_SetupPlaying', dispatch);
+    const advance = source!.indexOf('GlimSkip_Advance', dispatch);
+    expect(setup).toBeGreaterThan(dispatch);
+    expect(advance).toBeGreaterThan(setup);
+  });
+
+  it('assembles with AZM', async () => {
+    const { source, diagnostics } = compileToAzm(cardProgram);
+    expect(diagnostics).toEqual([]);
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-cards-'));
+    const entry = path.join(dir, 'cards.asm');
+    writeFileSync(entry, source!);
+    const assembled = await compile(entry, {
+      emitBin: true,
+      emitHex: false,
+      emitD8m: false,
+      registerContracts: 'error',
+    });
+    expect(assembled.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+  });
+});
+
 describe('AZM round trip', () => {
   it('generated CounterToy source assembles cleanly with AZM', async () => {
     const result = compileToAzm(counterToy);

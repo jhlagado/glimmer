@@ -22,7 +22,8 @@ import type {
   ShapeColor,
   ShapeDecl,
 } from './model.js';
-import { EFFECT_PHASES, FRAME_COUNT, TEC1G_KEY_CODES } from './model.js';
+import { EFFECT_PHASES, CURRENT_CARD,
+  FRAME_COUNT, TEC1G_KEY_CODES } from './model.js';
 
 export interface GenerateOptions {
   /** Assembly origin for the generated program. Default: $4000. */
@@ -85,10 +86,12 @@ export function generateAzm(
   // Flag-carrying cells: states, pulses, ramps, then FrameCount if any
   // block triggers on it. v0.3 allocates up to four 8-bit banks.
   const frameCountUsed = program.effects.some((e) => e.depends.includes(FRAME_COUNT));
+  const hasCards = program.cards.length > 0;
   const trackedCells = [
     ...program.states.map((s) => s.name),
     ...program.pulses.map((p) => p.name),
     ...program.ramps.map((r) => r.name),
+    ...(hasCards ? [CURRENT_CARD] : []),
     ...(frameCountUsed ? [FRAME_COUNT] : []),
   ];
   const maxTrackedCells = MAX_CHANGE_FLAG_BANKS * CHANGE_FLAGS_PER_BANK;
@@ -174,8 +177,16 @@ export function generateAzm(
   };
   const anySameFrameRaise = program.effects.some((e) => raiseMasks(e).now.size > 0);
 
+  // Enter blocks run before the card's other effects in their phase, so
+  // entry setup is visible to the rest of the frame.
   const effectsByPhase = new Map(
-    EFFECT_PHASES.map((phase) => [phase, program.effects.filter((e) => e.phase === phase)]),
+    EFFECT_PHASES.map((phase) => [
+      phase,
+      [
+        ...program.effects.filter((e) => e.phase === phase && e.enter === true),
+        ...program.effects.filter((e) => e.phase === phase && e.enter !== true),
+      ],
+    ]),
   );
   const hasPhase = (phase: string): boolean =>
     (effectsByPhase.get(phase as (typeof EFFECT_PHASES)[number]) ?? []).length > 0;
@@ -272,6 +283,14 @@ export function generateAzm(
   }
   emit();
 
+  if (hasCards) {
+    emit('; --- cards ---');
+    emit('; Exactly one card is active; CurrentCard holds it. Blocks in a');
+    emit("; card's section dispatch only while it is active.");
+    emit(`${'Card'.padEnd(17)} .enum ${program.cards.map((card) => card.name).join(', ')}`);
+    emit();
+  }
+
   if (program.types.length > 0) {
     emit('; --- layout types ---');
     emit('; AZM owns the type system: sizeof, offset, and layout casts');
@@ -320,6 +339,10 @@ export function generateAzm(
   for (const ramp of program.ramps) {
     emit(`${`${ramp.name}:`.padEnd(17)} .db ${ramp.steps - 1}   ; ramp progress, idle at terminal`);
   }
+  if (hasCards) {
+    const first = program.cards[0]?.name as string;
+    emit(`${`${CURRENT_CARD}:`.padEnd(17)} .db Card.${first}   ; active card, starts changed`);
+  }
   if (frameCountUsed) {
     emit(`${`${FRAME_COUNT}:`.padEnd(17)} .db 0`);
   }
@@ -334,6 +357,12 @@ export function generateAzm(
   for (const state of program.states) {
     if (!state.changedOnStart) continue;
     const info = flagInfo(state.name);
+    initialChanged[info.bank] = (initialChanged[info.bank] ?? 0) | (1 << info.bit);
+  }
+  if (hasCards) {
+    // CurrentCard starts changed: the first card's enter blocks run on
+    // the first frame.
+    const info = flagInfo(CURRENT_CARD);
     initialChanged[info.bank] = (initialChanged[info.bank] ?? 0) | (1 << info.bit);
   }
   for (const bank of bankIndexes) {
@@ -438,6 +467,12 @@ export function generateAzm(
     emit(`; --- ${phase} phase dispatch ---`);
     emit(`@__Run${capitalize(phase)}Effects:`);
     for (const effect of effects) {
+      if (effect.card !== undefined) {
+        // Card gate: the block only dispatches while its card is active.
+        op(`ld      a,(${CURRENT_CARD})`);
+        op(`cp      Card.${effect.card}`);
+        op(`jr      nz,GlimSkip_${effect.name}`);
+      }
       const depMasks = sortedMaskEntries(groupMasksByBank(effect.depends));
       if (depMasks.length === 1) {
         const [bank] = depMasks[0] as [number, string[]];
@@ -750,7 +785,7 @@ function emitBlockWrapper(
   emit: (line?: string) => void,
   op: (text: string) => void,
 ): void {
-  emit(`; --- ${effect.phase} block ${effect.name} ---`);
+  emit(`; --- ${effect.enter === true ? 'enter' : effect.phase} block ${effect.name} ---`);
   emit(`@Glim_${effect.name}:`);
   // The body is emitted byte-for-byte verbatim: AZM (>= 0.2.17) scopes
   // plain labels to the enclosing @ routine, so two blocks may both
@@ -758,6 +793,10 @@ function emitBlockWrapper(
   // label-anchored source-mapping contract.
   for (const line of effect.body) {
     emit(line);
+  }
+  if (effect.goto !== undefined) {
+    op(`ld      a,Card.${effect.goto}      ; goto ${effect.goto}`);
+    op(`ld      (${CURRENT_CARD}),a`);
   }
   for (const [bank, bankMasks] of [...masks.now.entries()].sort(([a], [b]) => a - b)) {
     op(`ld      a,(Raised${bank})          ; deliver to later phases this frame`);

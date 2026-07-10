@@ -306,6 +306,57 @@ contract like any other routine, and its plain labels are local to it.
 The body falls through like a block body; the generator appends the
 `ret` (conditional early returns like `ret c` are fine).
 
+### 3.8 Cards
+
+```text
+card Splash
+
+effect Start
+    on GoPressed
+    goto Playing
+end
+
+card Playing
+
+enter SetupPlaying
+    updates Score
+begin
+    xor a
+    ld (Score),a
+end
+
+effect Advance
+    on Tick
+    updates Score
+begin
+    ...
+end
+```
+
+A card is a screen or mode in the HyperCard sense: exactly one is
+active. A `card` line starts a section — everything after it belongs to
+that card until the next `card` line or end of file. There is no
+closing keyword, so the language stays nesting-free; declarations
+before the first `card` are global. Repeating a card name re-enters its
+section (including from a part).
+
+Cards generate an AZM enum (`Card .enum Splash, Playing`) and a
+built-in state cell `CurrentCard`, initialized to the first card and
+marked changed so the first card's `enter` blocks run on frame one.
+Blocks in a card's section dispatch only while that card is active —
+this is the flag-dispatch boilerplate cards absorb.
+
+`enter` blocks run once on card entry: their trigger is `CurrentCard`
+changing to their card. They take `updates` (and `goto`) but no `on`,
+and dispatch before the card's other blocks in their phase.
+
+`goto Playing` in a block header is an unconditional transition once
+the block runs: the generated wrapper stores `Card.Playing` into
+`CurrentCard` after the body, and the change propagates through the
+ordinary flag machinery (a goto is an update of `CurrentCard`, and the
+dependency report shows it). `begin` is optional when `goto` is
+present, so header-only routing blocks close directly with `end`.
+
 ## 4. Terminology
 
 One word, one meaning — the vocabulary follows the same discipline as the

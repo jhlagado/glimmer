@@ -24,6 +24,7 @@
 
 import type {
   Binding,
+  CardDecl,
   CurveDecl,
   CurvePreset,
   EffectDecl,
@@ -42,7 +43,7 @@ import type {
   TypeFieldDecl,
 } from './model.js';
 import type { ImportDecl } from './model.js';
-import { FRAME_COUNT, TEC1G_KEY_CODES } from './model.js';
+import { CURRENT_CARD, FRAME_COUNT, TEC1G_KEY_CODES } from './model.js';
 
 const PLATFORMS = ['tec1g-mon3'];
 const DISPLAYS = ['matrix8x8'];
@@ -138,6 +139,7 @@ export interface ParsedUnit {
   bindings: Binding[];
   effects: EffectDecl[];
   routines: RoutineDecl[];
+  cards: CardDecl[];
   diagnostics: GlimmerDiagnostic[];
 }
 
@@ -175,6 +177,8 @@ export function parseUnit(
   const bindings: Binding[] = [];
   const effects: EffectDecl[] = [];
   const routines: RoutineDecl[] = [];
+  const cards: CardDecl[] = [];
+  let currentCard: string | null = null;
 
   let i = 0;
   while (i < lines.length) {
@@ -645,13 +649,30 @@ export function parseUnit(
       continue;
     }
 
-    const blockMatch = /^(effect|compute|render)\s+(.*)$/.exec(text);
+    if (text.startsWith('card ')) {
+      const name = text.slice('card '.length).trim();
+      if (!IDENT.test(name)) {
+        error(lineNo, `Invalid card name "${name}".`);
+        continue;
+      }
+      // A card line starts a section: everything after it belongs to
+      // that card until the next card line or end of file. Repeating a
+      // card name re-enters its section (also across parts).
+      if (!cards.some((card) => card.name === name)) {
+        cards.push({ name, line: lineNo });
+      }
+      currentCard = name;
+      continue;
+    }
+
+    const blockMatch = /^(effect|compute|render|enter)\s+(.*)$/.exec(text);
     if (blockMatch) {
       // Block declarations: the keyword is the phase.
       //   compute X  — derive phase; state computed from other state
       //   effect Y   — logic phase; ordinary game/app behaviour
       //   render Z   — render phase; state depicted, never updated
-      const keyword = blockMatch[1] as 'effect' | 'compute' | 'render';
+      //   enter W    — logic phase; runs once on entry to its card
+      const keyword = blockMatch[1] as 'effect' | 'compute' | 'render' | 'enter';
       const phase: EffectPhase =
         keyword === 'compute' ? 'derive' : keyword === 'render' ? 'render' : 'logic';
       const parts = (blockMatch[2] ?? '').trim().split(/\s+/);
@@ -665,11 +686,18 @@ export function parseUnit(
           `${keyword} takes a single name; unexpected "${parts[1]}". (Phase modifiers were replaced by the compute/render keywords.)`,
         );
       }
+      if (keyword === 'enter' && currentCard === null) {
+        error(lineNo, `enter ${name} must be inside a card section: enter runs on card entry.`);
+        continue;
+      }
       const depends: string[] = [];
       const updates: string[] = [];
+      let gotoTarget: string | undefined;
 
-      // Header lines until the begin body opens.
+      // Header lines until the begin body opens. A block with goto may
+      // close with a bare end instead: header-only routing blocks.
       let sawBody = false;
+      let bodyOptional = false;
       while (i < lines.length) {
         const headerLineNo = i + 1;
         const header = stripComment(lines[i] ?? '').trim();
@@ -679,7 +707,18 @@ export function parseUnit(
           sawBody = true;
           break;
         }
+        if (header === 'end' && gotoTarget !== undefined) {
+          bodyOptional = true;
+          break;
+        }
         if (header.startsWith('on ')) {
+          if (keyword === 'enter') {
+            error(
+              headerLineNo,
+              `enter ${name} takes no "on": card entry is its trigger (CurrentCard changing to ${currentCard ?? 'its card'}).`,
+            );
+            continue;
+          }
           depends.push(...splitNames(header.slice('on '.length)));
           continue;
         }
@@ -687,10 +726,30 @@ export function parseUnit(
           updates.push(...splitNames(header.slice('updates '.length)));
           continue;
         }
+        if (header.startsWith('goto ')) {
+          const target = header.slice('goto '.length).trim();
+          if (!IDENT.test(target)) {
+            error(headerLineNo, `Invalid goto target "${target}" in ${keyword} ${name}.`);
+            continue;
+          }
+          if (keyword === 'render') {
+            error(
+              headerLineNo,
+              `render ${name} cannot goto: render blocks depict state. Route from effect or enter.`,
+            );
+            continue;
+          }
+          if (gotoTarget !== undefined) {
+            error(headerLineNo, `${keyword} ${name} declares more than one goto.`);
+            continue;
+          }
+          gotoTarget = target;
+          continue;
+        }
         error(headerLineNo, `Unexpected line in ${keyword} ${name}: "${header}".`);
       }
 
-      if (!sawBody) {
+      if (!sawBody && !bodyOptional) {
         error(lineNo, `${keyword} ${name} has no begin...end body.`);
         continue;
       }
@@ -699,22 +758,27 @@ export function parseUnit(
       // The first body line's source position anchors the debug map.
       const bodyLine = i + 1;
       const body: string[] = [];
-      let sawEnd = false;
-      while (i < lines.length) {
-        const raw = lines[i] ?? '';
-        i += 1;
-        if (raw.trim() === 'end') {
-          sawEnd = true;
-          break;
+      if (sawBody) {
+        let sawEnd = false;
+        while (i < lines.length) {
+          const raw = lines[i] ?? '';
+          i += 1;
+          if (raw.trim() === 'end') {
+            sawEnd = true;
+            break;
+          }
+          body.push(raw);
         }
-        body.push(raw);
-      }
-      if (!sawEnd) {
-        error(lineNo, `${keyword} ${name}: missing end.`);
-        continue;
+        if (!sawEnd) {
+          error(lineNo, `${keyword} ${name}: missing end.`);
+          continue;
+        }
       }
 
-      if (depends.length === 0) {
+      if (keyword === 'enter') {
+        // Card entry is the trigger: CurrentCard changed to this card.
+        depends.push(CURRENT_CARD);
+      } else if (depends.length === 0) {
         error(lineNo, `${keyword} ${name} has no "on" triggers; it would never run.`);
         continue;
       }
@@ -733,7 +797,11 @@ export function parseUnit(
         );
         continue;
       }
-      effects.push({ name, phase, depends, updates, body, line: lineNo, bodyLine });
+      const effect: EffectDecl = { name, phase, depends, updates, body, line: lineNo, bodyLine };
+      if (currentCard !== null) effect.card = currentCard;
+      if (keyword === 'enter') effect.enter = true;
+      if (gotoTarget !== undefined) effect.goto = gotoTarget;
+      effects.push(effect);
       continue;
     }
 
@@ -759,6 +827,7 @@ export function parseUnit(
     bindings,
     effects,
     routines,
+    cards,
     diagnostics,
   };
 }
@@ -789,6 +858,7 @@ export function assembleProgram(units: ParsedUnit[]): ParseResult {
     bindings: [] as Binding[],
     effects: [] as EffectDecl[],
     routines: [] as RoutineDecl[],
+    cards: [] as CardDecl[],
     imports: [] as ImportDecl[],
   };
   for (const unit of units) {
@@ -808,6 +878,22 @@ export function assembleProgram(units: ParsedUnit[]): ParseResult {
   for (const routine of merged.routines) {
     const file = fileOf.get(routine);
     if (file !== undefined) routine.file = file;
+  }
+  // Card sections may repeat (re-entering a card, or a part contributing
+  // blocks to a card the entry declared): one card per name, in order of
+  // first appearance. The first card is the one the program starts in.
+  const seenCards = new Set<string>();
+  merged.cards = merged.cards.filter((card) => {
+    if (seenCards.has(card.name)) return false;
+    seenCards.add(card.name);
+    return true;
+  });
+  // goto is an update of CurrentCard: fold it into `updates` so change
+  // masks, rollover, and the dependency report all see the real dataflow.
+  for (const effect of merged.effects) {
+    if (effect.goto !== undefined && !effect.updates.includes(CURRENT_CARD)) {
+      effect.updates.push(CURRENT_CARD);
+    }
   }
   const error = (owner: { line: number } | number, message: string): void => {
     if (typeof owner === 'number') {
@@ -910,6 +996,7 @@ function validateReferences(
     | 'bindings'
     | 'effects'
     | 'routines'
+    | 'cards'
   >,
   diagnostics: GlimmerDiagnostic[],
   fileOf: (owner: object) => string | undefined = () => undefined,
@@ -958,16 +1045,20 @@ function validateReferences(
   // cannot appear in `on`.
   const pulseNames = new Set(parts.pulses.map((pulse) => pulse.name));
   const timerNames = new Set(parts.timers.map((timer) => timer.name));
+  const hasCards = parts.cards.length > 0;
+  const cardNames = new Set(parts.cards.map((card) => card.name));
   const onNames = new Set([
     ...parts.states.map((s) => s.name),
     ...pulseNames,
     ...parts.ramps.map((r) => r.name),
     FRAME_COUNT,
+    ...(hasCards ? [CURRENT_CARD] : []),
   ]);
   const updateNames = new Set([
     ...parts.states.map((s) => s.name),
     ...timerNames,
     ...parts.ramps.map((r) => r.name),
+    ...(hasCards ? [CURRENT_CARD] : []),
   ]);
 
   for (const binding of parts.bindings) {
@@ -999,6 +1090,12 @@ function validateReferences(
       if (!updateNames.has(target)) {
         error(effect, `Effect ${effect.name} updates undeclared state "${target}".`);
       }
+    }
+  }
+
+  for (const effect of parts.effects) {
+    if (effect.goto !== undefined && !cardNames.has(effect.goto)) {
+      error(effect, `${effect.name}: goto target "${effect.goto}" is not a declared card.`);
     }
   }
 
@@ -1075,6 +1172,8 @@ const RESERVED_NAMES = new Set([
   ...Array.from({ length: 4 }, (_, bank) => `Next${bank}`),
   'MainLoop',
   'Framebuffer',
+  'CurrentCard',
+  'Card',
   'PrevKeys',
   'ScanFrame',
   'MxMask',

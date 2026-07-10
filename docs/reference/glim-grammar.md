@@ -93,6 +93,7 @@ statement       ::= program-decl
                   | bind-decl
                   | block-decl
                   | routine-decl
+                  | card-decl
 
 program-decl    ::= "program" identifier
 
@@ -153,6 +154,12 @@ ramp-decl       ::= "ramp" identifier ":" "byte" "steps" number
                   ; its cell changed each step, fires the pulse at
                   ; steps-1, idles there; retriggered by writing the cell.
 
+card-decl       ::= "card" identifier
+                  ; starts a section: blocks after it belong to that
+                  ; card until the next card line or end of file. No
+                  ; closing keyword. Generates a Card enum and the
+                  ; built-in CurrentCard cell (first card = start card).
+
 routine-decl    ::= "routine" identifier newline
                     "begin" newline
                     z80-body
@@ -184,14 +191,18 @@ color-name      ::= "red" | "green" | "blue" | "yellow" | "cyan"
 
 block-decl      ::= block-kind identifier
                     block-header*
-                    "begin" newline
-                    azm-line*
+                    ( "begin" newline azm-line* )?  ; body optional with goto
                     "end"
-block-kind      ::= "compute" | "effect" | "render"
+block-kind      ::= "compute" | "effect" | "render" | "enter"
                   ; the keyword is the phase: compute=derive,
-                  ; effect=logic, render=render
-block-header    ::= "on" name-list
+                  ; effect=logic, render=render. enter=logic, runs once
+                  ; on entry to the enclosing card, before the card's
+                  ; other blocks; takes no "on" (entry is the trigger).
+block-header    ::= "on" name-list                  ; not on enter
                   | "updates" name-list             ; not on render
+                  | "goto" identifier               ; card transition after
+                                                    ; the block runs; not
+                                                    ; on render
 name-list       ::= identifier ( "," identifier )*
 
 identifier      ::= [A-Za-z_][A-Za-z0-9_]*

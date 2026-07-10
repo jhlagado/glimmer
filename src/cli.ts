@@ -58,6 +58,14 @@ export function depsReport(program: GlimmerProgram): string {
     ...program.pulses.map((pu) => ({ name: pu.name, kind: 'pulse' })),
     ...program.timers.map((t) => ({ name: t.name, kind: t.once ? 'timer once' : 'timer' })),
     ...program.ramps.map((r) => ({ name: r.name, kind: 'ramp' })),
+    ...(program.cards.length > 0
+      ? [
+          {
+            name: 'CurrentCard',
+            kind: `card state (built-in; cards: ${program.cards.map((c) => c.name).join(', ')})`,
+          },
+        ]
+      : []),
   ];
   for (const cell of cells) {
     const writers: string[] = [];
