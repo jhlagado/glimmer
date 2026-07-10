@@ -1,0 +1,60 @@
+; Tetro — the headline acceptance test, adapted from corpus/tetro.
+; Declarations here; the cards and blocks live in tetro-rules.glim;
+; the piece tables and collision engine are a hand-written AZM module.
+;
+; First cut simplifications vs the corpus game (noted in the 0.2 plan):
+; instant line clear (no flash animation), no LCD messaging (matrix +
+; HUD score only), no next-piece preview, no game-over key gate.
+
+program Tetro
+
+platform tec1g-mon3
+display matrix8x8
+
+part "tetro-rules.glim"
+import "tetro-lib.asm"
+
+; --- state (corpus ram.asm, minus what Glimmer owns) ---
+
+state PlayerX        : byte
+state PlayerY        : byte
+state CurPieceIndex  : byte
+state CurRotation    : byte
+state NextPieceIndex : byte
+state Score          : word
+state LinesCleared   : byte
+state BoardRows      : byte[8]      ; occupancy bitmap, MSB-left
+state BoardRed       : byte[8]      ; colour planes
+state BoardGreen     : byte[8]
+state BoardBlue      : byte[8]
+
+; --- pulses ---
+
+pulse MoveLeftP
+pulse MoveRightP
+pulse SoftDropP
+pulse RotateP
+pulse PauseP
+pulse StartP
+pulse GravityFire
+
+; --- timers ---
+
+timer Gravity : byte = 32 -> GravityFire   ; writable: difficulty curve
+
+; --- input (corpus PollInput + HandleHeldDir, as declarations) ---
+
+bind key KEY_4  held period 10 -> MoveLeftP
+bind key KEY_6  held period 10 -> MoveRightP
+bind key KEY_2  held period 3  -> SoftDropP
+bind key KEY_5  rising -> RotateP
+bind key KEY_AD rising -> RotateP
+bind key KEY_0  rising -> PauseP
+bind key KEY_GO rising -> StartP
+
+; --- sounds (corpus sound.asm cues) ---
+
+sound Rotate len 24  div 2
+sound Lock   len 32  div 4
+sound Clear  len 72  div 2
+sound Over   len 232 div 8

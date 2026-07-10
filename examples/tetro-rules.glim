@@ -1,0 +1,215 @@
+; Tetro rules — the cards and blocks. Part of tetro.glim.
+;
+; Corpus Tetro dispatched its modes with flag checks at the top of
+; LogicTick; cards make each mode's blocks local to it, and `enter`
+; blocks replace the hand-sequenced init calls.
+
+card Splash
+
+enter SplashShow
+begin
+    call FbClear
+    call HudBlankDig
+end
+
+render SplashTwinkle
+    on FrameCount
+begin
+    ; one random pixel per frame, wiped every 64 frames
+    ld a,(FrameCount)
+    and %00111111
+    call z,FbClear
+    ld c,ApiRandom
+    rst $10             ; A = random byte
+    ld e,a
+    and %00000111
+    ld b,a              ; column
+    ld a,e
+    rrca
+    rrca
+    rrca
+    and %00000111
+    ld c,a              ; row
+    ld a,e
+    rrca
+    rrca
+    and %00000111
+    jr nz,_color
+    ld a,COLOR_CYAN     ; colour 0 would be an invisible twinkle
+_color:
+    call FbPlot
+end
+
+effect SplashExit
+    on StartP
+    goto Playing
+end
+
+card Playing
+
+enter StartRound
+    updates BoardRows, BoardRed, BoardGreen, BoardBlue, Score
+    updates PlayerX, PlayerY, CurPieceIndex, CurRotation, NextPieceIndex
+    updates LinesCleared
+begin
+    call InitGame
+    call SpawnPiece      ; empty board: the spawn probe cannot block
+end
+
+effect ApplyMove
+    on MoveLeftP, MoveRightP
+    updates PlayerX
+begin
+    ld a,(PlayerX)
+    ld d,a
+    ld a,(MoveLeftP)
+    or a
+    jr z,_right
+    dec d                ; left
+    jr _probe
+_right:
+    inc d
+_probe:
+    ld a,d
+    cp 8                 ; underflow wraps past 8 too (unsigned)
+    jr nc,_done
+    ld a,(PlayerY)
+    ld e,a
+    call CheckCollAt
+    jr c,_done
+    ld a,d
+    ld (PlayerX),a
+_done:
+end
+
+effect ApplyRotate
+    on RotateP
+    updates CurRotation
+begin
+    ld a,(CurRotation)
+    ld b,a               ; keep the old rotation for the revert
+    inc a
+    and %00000011
+    ld (CurRotation),a
+    push bc
+    call SetCurPiece
+    pop bc
+    ld a,(PlayerX)
+    ld d,a
+    ld a,(PlayerY)
+    ld e,a
+    call CheckCollAt
+    jr nc,_ok
+    ld a,b               ; blocked: restore the old rotation
+    ld (CurRotation),a
+    call SetCurPiece
+    jr _done
+_ok:
+    call Snd_Rotate
+_done:
+end
+
+effect ApplyGravity
+    on GravityFire, SoftDropP
+    updates PlayerY, BoardRows, BoardRed, BoardGreen, BoardBlue
+    updates Score, LinesCleared, CurrentCard
+    updates PlayerX, CurPieceIndex, CurRotation, NextPieceIndex
+begin
+    ld a,(PlayerX)
+    ld d,a
+    ld a,(PlayerY)
+    inc a
+    ld e,a
+    call CheckCollAt
+    jr c,_lock
+    ld a,e               ; free: descend
+    ld (PlayerY),a
+    jp _done
+_lock:
+    call LockPiece
+    call Snd_Lock
+    call ClearFullRows   ; A = rows cleared
+    or a
+    jr z,_spawn
+    ld b,a
+    ld a,(LinesCleared)
+    add a,b
+    ld (LinesCleared),a
+    ld a,b
+    call ScoreForClears  ; DE = delta
+    ld hl,(Score)
+    add hl,de
+    ld (Score),hl
+    call Snd_Clear
+_spawn:
+    call SpawnPiece
+    jr nc,_done          ; spawn blocked: the stack reached the top
+    ; conditional navigation: goto is unconditional once a block runs,
+    ; so a conditional transition writes CurrentCard directly (declared
+    ; in updates). Enter blocks are edge-triggered, so the every-run
+    ; change mark cannot re-run them.
+    ld a,Card.GameOver
+    ld (CurrentCard),a
+    call Snd_Over
+_done:
+end
+
+compute DifficultyCurve
+    on Score
+    updates Gravity
+begin
+    ld hl,(Score)
+    ld de,2000
+    or a
+    sbc hl,de
+    jr c,_keep
+    ld a,16              ; past 2000: twice the pace
+    ld (Gravity),a
+_keep:
+end
+
+effect Pause
+    on PauseP
+    goto Paused
+end
+
+render DrawBoard
+    on BoardRows, PlayerX, PlayerY, CurRotation, CurPieceIndex
+begin
+    call DrawBoardFb
+end
+
+render DrawScore
+    on Score
+begin
+    ld hl,(Score)
+    call HudWriteU16
+end
+
+card Paused
+
+effect Unpause
+    on PauseP
+    goto Playing
+end
+
+card GameOver
+
+render GameOverPulse
+    on FrameCount
+begin
+    ; dim red heartbeat over the final board: repaint the board, then
+    ; overlay the top row in red on alternating half-second beats
+    call DrawBoardFb
+    ld a,(FrameCount)
+    and %00010000
+    jr z,_done
+    ld hl,Framebuffer    ; row 0 red byte
+    ld (hl),$FF
+_done:
+end
+
+effect Restart
+    on StartP
+    goto Splash
+end

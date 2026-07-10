@@ -175,11 +175,19 @@ global. Blocks in a card's section run only while that card is active.
 Cards generate a `Card` enum and a built-in `CurrentCard` cell (legal in
 `on` and `updates`), starting at the first declared card. `enter` blocks
 run once on card entry — no `on` line; entry is the trigger — and before
-the card's other blocks. `goto Playing` in a block header switches card
-after the block runs; with `goto`, `begin` is optional, so a header-only
-routing block closes directly with `end`. The switch lands next frame
-when the router runs in the same phase as the card's blocks — the
-ordinary one-frame deferral of the change-flag machinery.
+the card's other blocks. Entry is edge-triggered: an enter runs only
+when the card actually changed to its card, so marking `CurrentCard`
+changed without switching cannot re-run it. `goto Playing` in a block
+header switches card after the block runs; with `goto`, `begin` is
+optional, so a header-only routing block closes directly with `end`.
+The switch lands next frame when the router runs in the same phase as
+the card's blocks — the ordinary one-frame deferral of the change-flag
+machinery.
+
+When a transition depends on a runtime test, write `CurrentCard`
+directly under `updates CurrentCard` — `goto` is the unconditional
+sugar, the conditional form is an ordinary conditional store of a
+`Card.` enum value (see Tetro's blocked-spawn game-over).
 
 ## part and import
 

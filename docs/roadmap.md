@@ -256,6 +256,21 @@ the remaining language milestones below (structured data, cards,
 routines), validated by `tetro.glim` as the acceptance test. Work plan:
 [plans/release-0.2.md](plans/release-0.2.md).
 
+**Tetro. ✅ Landed 2026-07-10, first cut.** `examples/tetro.glim` +
+`tetro-rules.glim` (cards) + `tetro-lib.asm` (piece tables and the
+collision/lock/clear engine, adapted from corpus): pieces fall, move,
+rotate, lock; full rows clear and collapse with corpus scoring; the
+difficulty curve doubles the pace past 2000; splash, pause, and
+game-over cards with GO to start and restart. First-cut
+simplifications: instant line clear (no flash), no LCD messaging, no
+next-piece preview, no game-over key gate. The adaptation immediately
+paid for itself as a pressure test: it exposed that unconditional
+`updates` marking made conditional card transitions and enter blocks
+interact wrongly — fixed by making enter blocks **edge-triggered**
+(GlimPrevCard shadow), which in turn made *conditional navigation*
+(body writes `CurrentCard` under `updates CurrentCard`) a supported
+pattern, answering the sketch's open question about gating pulses.
+
 Versioning note: package versions and roadmap milestones are separate
 namespaces now. Milestones go by feature names, not version-shaped
 labels (the old "v0.5"/"v0.6" names are retired); package releases stay

@@ -346,9 +346,13 @@ marked changed so the first card's `enter` blocks run on frame one.
 Blocks in a card's section dispatch only while that card is active —
 this is the flag-dispatch boilerplate cards absorb.
 
-`enter` blocks run once on card entry: their trigger is `CurrentCard`
-changing to their card. They take `updates` (and `goto`) but no `on`,
-and dispatch before the card's other blocks in their phase.
+`enter` blocks run once on card entry, and entry is edge-triggered:
+the runtime keeps a previous-card shadow (`GlimPrevCard`) and an enter
+block runs only when `CurrentCard`'s flag is delivered *and* the card
+actually changed to its card. A block that marks `CurrentCard` changed
+without switching cards cannot re-run enters. Enter blocks take
+`updates` (and `goto`) but no `on`, and dispatch before the card's
+other blocks in their phase.
 
 `goto Playing` in a block header is an unconditional transition once
 the block runs: the generated wrapper stores `Card.Playing` into
@@ -356,6 +360,22 @@ the block runs: the generated wrapper stores `Card.Playing` into
 ordinary flag machinery (a goto is an update of `CurrentCard`, and the
 dependency report shows it). `begin` is optional when `goto` is
 present, so header-only routing blocks close directly with `end`.
+
+**Conditional navigation** is a conditional write: when a transition
+depends on a runtime test, the block declares `updates CurrentCard`
+and its body stores the card enum value on the branch that leaves —
+
+```asm
+    call SpawnPiece
+    jr nc,_done
+    ld a,Card.GameOver     ; blocked spawn: the game ends
+    ld (CurrentCard),a
+_done:
+```
+
+This is safe precisely because enters are edge-triggered: the
+unconditional change-mark from `updates` cannot re-run them on frames
+where the card did not change.
 
 ## 4. Terminology
 

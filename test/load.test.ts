@@ -141,6 +141,47 @@ end
   });
 });
 
+describe('tetro (the acceptance test)', () => {
+  it('loads with part + import, uses cards and a routine module, assembles strict-clean', async () => {
+    const entry = path.join(import.meta.dirname, '../examples/tetro.glim');
+    const { program, diagnostics } = loadGlimmerProgram(entry);
+    expect(diagnostics).toEqual([]);
+    expect(program?.imports.map((imp) => imp.path)).toEqual(['tetro-lib.asm']);
+    expect(program?.cards.map((card) => card.name)).toEqual([
+      'Splash',
+      'Playing',
+      'Paused',
+      'GameOver',
+    ]);
+
+    const generated = generateAzm(program!);
+    expect(generated.diagnostics).toEqual([]);
+    expect(generated.source).toContain('Card              .enum Splash, Playing, Paused, GameOver');
+    expect(generated.source).toContain('GlimPrevCard:');
+    // Enter edge gate: SetupPlaying (StartRound) must not re-run on the
+    // conditional CurrentCard writes from ApplyGravity.
+    expect(generated.source).toMatch(
+      /ld {6}a,\(GlimPrevCard\)\n {8}cp {6}Card\.Playing\n {8}jr {6}z,GlimSkip_StartRound/,
+    );
+
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-tetro-'));
+    writeFileSync(path.join(dir, 'tetro.main.asm'), generated.source);
+    writeFileSync(
+      path.join(dir, 'tetro-lib.asm'),
+      readFileSync(path.join(import.meta.dirname, '../examples/tetro-lib.asm')),
+    );
+    const assembled = await compile(path.join(dir, 'tetro.main.asm'), {
+      emitBin: true,
+      emitHex: false,
+      emitD8m: false,
+      registerContracts: 'strict',
+      registerContractsProfile: 'mon3',
+    });
+    expect(assembled.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+    expect(assembled.artifacts.find((a) => a.kind === 'bin')).toBeDefined();
+  });
+});
+
 describe('snake (first complete game)', () => {
   it('loads multi-file with import, uses two flag banks, assembles strict-clean', async () => {
     const entry = path.join(import.meta.dirname, '../examples/snake.glim');

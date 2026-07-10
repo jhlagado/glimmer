@@ -342,6 +342,7 @@ export function generateAzm(
   if (hasCards) {
     const first = program.cards[0]?.name as string;
     emit(`${`${CURRENT_CARD}:`.padEnd(17)} .db Card.${first}   ; active card, starts changed`);
+    emit(`${'GlimPrevCard:'.padEnd(17)} .db $FF          ; enter edge detector ($FF = before any card)`);
   }
   if (frameCountUsed) {
     emit(`${`${FRAME_COUNT}:`.padEnd(17)} .db 0`);
@@ -466,12 +467,28 @@ export function generateAzm(
     if (effects.length === 0) continue;
     emit(`; --- ${phase} phase dispatch ---`);
     emit(`@__Run${capitalize(phase)}Effects:`);
+    let pendingPrevSync = effects.some((e) => e.enter === true);
     for (const effect of effects) {
+      if (pendingPrevSync && effect.enter !== true) {
+        // All enters for this phase have dispatched: remember the card
+        // they saw, so only genuine transitions re-run them.
+        op(`ld      a,(${CURRENT_CARD})`);
+        op('ld      (GlimPrevCard),a');
+        pendingPrevSync = false;
+      }
       if (effect.card !== undefined) {
         // Card gate: the block only dispatches while its card is active.
         op(`ld      a,(${CURRENT_CARD})`);
         op(`cp      Card.${effect.card}`);
         op(`jr      nz,GlimSkip_${effect.name}`);
+      }
+      if (effect.enter === true && effect.card !== undefined) {
+        // Edge gate: enter runs on a transition into the card, not on
+        // every CurrentCard mark (conditional navigation writes the
+        // cell without switching cards).
+        op('ld      a,(GlimPrevCard)');
+        op(`cp      Card.${effect.card}`);
+        op(`jr      z,GlimSkip_${effect.name}`);
       }
       const depMasks = sortedMaskEntries(groupMasksByBank(effect.depends));
       if (depMasks.length === 1) {
@@ -492,6 +509,10 @@ export function generateAzm(
       emit(`GlimRun_${effect.name}:`);
       op(`call    Glim_${effect.name}`);
       emit(`GlimSkip_${effect.name}:`);
+    }
+    if (pendingPrevSync) {
+      op(`ld      a,(${CURRENT_CARD})`);
+      op('ld      (GlimPrevCard),a');
     }
     op('ret');
     emit();
