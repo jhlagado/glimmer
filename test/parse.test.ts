@@ -625,6 +625,32 @@ describe('parseGlimmer', () => {
     expect(messages).toContain('Reserved name "CurrentCard"');
   });
 
+  it('warns when a body writes a cell missing from updates', () => {
+    const source = [
+      'program P',
+      'state Score : byte',
+      'state Lives : byte',
+      'pulse Go',
+      'bind key KEY_1 rising -> Go',
+      'effect Sneaky',
+      '    on Go',
+      '    updates Score',
+      'begin',
+      '    ld a,1',
+      '    ld (Score),a',
+      '    ld (Lives),a       ; not declared in updates',
+      'end',
+    ].join('\n');
+    const { program, diagnostics } = parseGlimmer(source);
+    // A warning, not an error: the program still compiles.
+    expect(program).not.toBeNull();
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      severity: 'warning',
+      message: expect.stringContaining('Sneaky writes Lives but does not declare "updates Lives"'),
+    });
+  });
+
   it('rejects bad type declarations and typed-state misuse', () => {
     const source = [
       'program P',

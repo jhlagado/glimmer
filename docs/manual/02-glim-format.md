@@ -381,6 +381,12 @@ the same block-local scope.
 Block bodies fall through — do not end them with `ret`. The generated
 wrapper appends the change-flag bookkeeping and the `ret`.
 
+Glimmer warns (without failing the build) when a body stores directly
+into a flag-carrying cell that is missing from `updates` — the change
+flag would never be raised, so dependent blocks would not run and the
+`--deps` report would lie. Writes through pointer registers cannot be
+seen by the scan; the `updates` line remains your declaration of intent.
+
 ## Sound and the seven-segment display
 
 On the matrix profile, the generated scan loop services a speaker and

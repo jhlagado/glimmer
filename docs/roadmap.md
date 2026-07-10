@@ -145,12 +145,13 @@ runs at most once per frame; the frame is a single forward pass; frame
 cost is bounded by effect count — no within-frame circularity is
 possible by construction.
 
-**Lint backlog.** ~~Plain labels inside blocks collide globally~~ —
-resolved upstream 2026-07-09: AZM 0.2.17 scopes plain labels to their
-enclosing `@` routine, so block labels are local by construction and
-Glimmer's `_label` renaming was removed (bodies are now byte-for-byte
-verbatim). Still open: the "body updates a declared cell not listed in
-`updates`" warning.
+**Lint backlog. ✅ Closed 2026-07-10.** Plain-label collisions resolved
+upstream (AZM 0.2.17 routine-scoped labels; Glimmer's `_label` renaming
+removed, bodies byte-for-byte verbatim). The "body writes a cell not
+listed in `updates`" check now ships as a warning — diagnostics carry a
+severity, warnings never fail the build, and direct `ld (Cell),` stores
+are scanned (pointer-register writes are invisible to a text scan, by
+design).
 
 **Matrix runtime. ✅ Landed 2026-07-07.**
 `held period N` bindings (first press fires, then autorepeats;

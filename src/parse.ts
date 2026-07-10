@@ -945,7 +945,8 @@ export function assembleProgram(units: ParsedUnit[]): ParseResult {
 
   validateReferences(merged, diagnostics, (owner) => fileOf.get(owner));
 
-  if (diagnostics.length > 0 || programName === null) {
+  const hasErrors = diagnostics.some((diagnostic) => diagnostic.severity !== 'warning');
+  if (hasErrors || programName === null) {
     return { program: null, diagnostics };
   }
   return {
@@ -1006,6 +1007,15 @@ function validateReferences(
     diagnostics.push(
       file === undefined ? { line: owner.line, message } : { line: owner.line, message, file },
     );
+  };
+  const warn = (owner: { line: number }, message: string): void => {
+    const file = fileOf(owner);
+    diagnostics.push({
+      line: owner.line,
+      message,
+      severity: 'warning',
+      ...(file === undefined ? {} : { file }),
+    });
   };
 
   // All declared names — states, pulses, effects (and future constructs) —
@@ -1096,6 +1106,32 @@ function validateReferences(
   for (const effect of parts.effects) {
     if (effect.goto !== undefined && !cardNames.has(effect.goto)) {
       error(effect, `${effect.name}: goto target "${effect.goto}" is not a declared card.`);
+    }
+  }
+
+  // Lint: a body that stores into a flag-carrying cell it does not
+  // declare in `updates` silently skips change propagation — the
+  // dependency report and downstream triggers would lie. Direct
+  // `ld (Cell),` stores only; writes through pointer registers are
+  // invisible to a text scan.
+  const storeRe = /\bld\s+\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)\s*,/i;
+  for (const effect of parts.effects) {
+    const missing = new Set<string>();
+    for (const line of effect.body) {
+      const semi = line.indexOf(';');
+      const code = semi >= 0 ? line.slice(0, semi) : line;
+      const match = storeRe.exec(code);
+      if (!match) continue;
+      const cell = match[1] as string;
+      if (!updateNames.has(cell)) continue;
+      if (effect.updates.includes(cell)) continue;
+      missing.add(cell);
+    }
+    for (const cell of missing) {
+      warn(
+        effect,
+        `${effect.name} writes ${cell} but does not declare "updates ${cell}": the change flag will not be raised and dependent blocks will not run.`,
+      );
     }
   }
 

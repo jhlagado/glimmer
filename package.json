@@ -1,7 +1,7 @@
 {
   "name": "@jhlagado/glimmer",
-  "version": "0.1.0",
-  "description": "Glimmer preprocessor for AZM: routine cards, reactive state and generated Z80 glue",
+  "version": "0.2.0",
+  "description": "Glimmer: a reactive Z80 game framework compiling to readable AZM — state cells, cards, routines, layout types, and source-level Debug80 maps",
   "license": "GPL-3.0-only",
   "engines": {
     "node": ">=20"

@@ -69,6 +69,12 @@ consumes:
   a generated `Snd_<Name>` wrapper over `SndStart`
 - `CurveDecl` — build-time byte lookup table emitted as a page-aligned
   `Curve_<Name>` data table
+- `RoutineDecl` — callable helper block: no triggers, no dispatch;
+  emitted as a public `@Name:` boundary, body verbatim, ret appended
+- `CardDecl` — a screen/mode; `card` lines start sections, blocks carry
+  `card`/`enter`/`goto` fields, and the generator emits the `Card`
+  enum, the `CurrentCard` cell, card-gated dispatch, and the
+  `GlimPrevCard` edge detector for enter blocks
 - `ShapeDecl` — matrix-profile bitmap resource emitted as a `Shape_<Name>`
   row table and drawn through `ShapeDraw`
 - `KeyBinding` — `bind key <KEY> rising -> <Pulse>` or, on TEC-1G,

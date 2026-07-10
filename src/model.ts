@@ -241,6 +241,8 @@ export interface GlimmerDiagnostic {
   message: string;
   /** Source file the diagnostic belongs to (multi-file programs). */
   file?: string;
+  /** Absent means error. Warnings never fail the build. */
+  severity?: 'error' | 'warning';
 }
 
 /** An AZM module brought into the generated program via .import. */

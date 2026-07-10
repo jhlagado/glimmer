@@ -247,7 +247,7 @@ function fromGlimmerDiagnostics(
 ): BuildDiagnostic[] {
   const entryDir = path.dirname(entryPath);
   return diagnostics.map((diagnostic) => ({
-    severity: 'error',
+    severity: diagnostic.severity ?? 'error',
     message: diagnostic.message,
     sourceName:
       diagnostic.file === undefined
@@ -295,8 +295,9 @@ export async function buildGlimmerProgram(
   const warnings: string[] = [];
 
   const loaded = loadGlimmerProgram(entryPath);
+  const loadDiagnostics = fromGlimmerDiagnostics(loaded.diagnostics, entryPath);
   if (loaded.program === null) {
-    return { diagnostics: fromGlimmerDiagnostics(loaded.diagnostics, entryPath), warnings };
+    return { diagnostics: loadDiagnostics, warnings };
   }
   const program: GlimmerProgram = loaded.program;
 
@@ -315,7 +316,7 @@ export async function buildGlimmerProgram(
   writeFileSync(asmPath, generated.source);
   const stage = options.stage ?? 'build';
   if (stage === 'generate') {
-    return { diagnostics: [], artifacts: { asm: asmPath }, warnings };
+    return { diagnostics: loadDiagnostics, artifacts: { asm: asmPath }, warnings };
   }
 
   // Pass 1: contract inference + checking; AZM returns the annotated
@@ -327,7 +328,7 @@ export async function buildGlimmerProgram(
     ...(isTec1g ? { registerContractsProfile: 'mon3' } : {}),
     skipAssembly: true,
   });
-  const checkDiagnostics = fromAzmDiagnostics(checked.diagnostics);
+  const checkDiagnostics = [...loadDiagnostics, ...fromAzmDiagnostics(checked.diagnostics)];
   if (hasErrors(checkDiagnostics)) {
     return { diagnostics: checkDiagnostics, warnings };
   }

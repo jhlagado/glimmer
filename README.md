@@ -25,34 +25,30 @@ game-only.
 
 ## Status
 
-Version 0.1.0 is the first publishable Glimmer line: a small,
-Debug80-friendly Z80 game framework that generates readable AZM. The
-current vertical slice compiles `.glim` meta-source (program, scalar and
-byte-array state, pulses, timing widgets, key bindings, effects with Z80
-block bodies, small resources, parts, and imports) into generated AZM
-source, which AZM assembles into `.hex`, `.bin`, and a `.d8.json`
-Debug80 map. The core examples work end to end:
+Version 0.2.0 is the language-complete line: everything the headline
+game needs, proven by `examples/tetro.glim` — falling pieces, held-key
+movement, rotation, line clears, a difficulty curve, and splash /
+pause / game-over screens, written entirely in shipped constructs and
+assembling strict-clean under AZM's register-contract checking.
 
-- `examples/counter.glim` — CounterToy from the spec (generic profile)
-- `examples/dot.glim` — a keypad-moved dot on the real TEC-1G 8x8 RGB
-  matrix (`platform tec1g-mon3` + `display matrix8x8`): MON-3 `_scanKeys`
-  input with held-key autorepeat, scan-driven display loop, edge-clamped
-  movement.
-- `examples/slide.glim` — ramp-driven motion mapped through an ease-out
-  curve table, a generated 2x2 shape, timer blink, arrival sound cue, and
-  seven-segment counter.
-- `examples/trail.glim` — byte array state as an 8-row trail buffer on
-  the TEC-1G matrix profile.
+The language: scalar, array, and typed state (layout types compiled to
+AZM `.type` records), pulses, timers and ramps, held/rising key
+bindings, compute/effect/render blocks with verbatim Z80 bodies,
+callable routines, cards (screens/modes with `enter` blocks and `goto`
+navigation), sound cues, curve tables, matrix shapes, multi-file
+programs (`part`), and hand-written AZM module imports.
 
-`examples/snake.glim` is included as a larger proof, not as the minimum
-learning path: it is the first complete game, a multi-file program
-  (`part`) with a hand-written imported AZM module, ring-buffer body in
-  array state, food, growth, speedup, sounds, and a HUD score.
+The toolchain: `glimmer build` compiles, injects AZM-inferred register
+contracts, assembles to `.hex`/`.bin`/`.d8.json`, and rewrites the
+Debug80 map so **breakpoints and stepping land in your `.glim` source**
+for block bodies while generated glue stays in readable AZM. The same
+pipeline is a programmatic API (`@jhlagado/glimmer/build`) shaped like
+AZM's compile API, ready for native Debug80 integration.
 
-The repo's `debug80.json` carries `dot`, `slide`, `trail`, and `snake`
-targets, so after
-`node dist/src/cli.js examples/<name>.glim && npx azm examples/<name>.main.asm`
-they run under Debug80.
+Examples, smallest first: `counter.glim` (generic profile),
+`dot.glim`, `slide.glim`, `trail.glim` (TEC-1G matrix profile
+features), then the games — `snake.glim` and `tetro.glim`. The repo's
+`debug80.json` carries a target for each matrix example.
 
 ## Getting Started
 
@@ -61,9 +57,12 @@ Glimmer requires Node.js 20 or newer.
 ```sh
 npm ci
 npm run build
-node dist/src/cli.js examples/counter.glim   # writes examples/counter.main.asm
-npx azm examples/counter.main.asm            # assembles hex/bin/d8 map
+node dist/src/cli.js build examples/counter.glim   # asm + hex + bin + d8 map
 ```
+
+The plain command stops at generated, contract-checked AZM
+(`node dist/src/cli.js examples/counter.glim`); `build` continues
+through assembly and the source-level debug map.
 
 The generated AZM is readable: API equates, change-flag constants,
 state storage, the runtime loop, binding polling, phase dispatch, wrapped user

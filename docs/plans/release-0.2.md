@@ -98,3 +98,14 @@ Structured data → routines (small) → cards → tetro.glim adaptation →
 lint + polish → docs pass. Each construct moves from sketch to
 `examples/` as it becomes real, with sketches/README.md proposals
 marked as landed.
+
+## Status — 2026-07-10: complete, pending playtest
+
+All items landed the same day: structured data, routines, cards (with
+edge-triggered enters and the conditional-navigation pattern the Tetro
+adaptation forced), tetro.glim (first cut: instant clear, no LCD, no
+preview, no key gate), the updates-mismatch warning (diagnostics grew a
+severity), CHANGELOG/README/description, version 0.2.0. Remaining
+before John calls the release: play Tetro under Debug80 (behavioral
+validation beyond strict-clean assembly) and an editorial pass over the
+manual.
