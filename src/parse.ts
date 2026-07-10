@@ -1029,7 +1029,7 @@ function validateReferences(
       error(owner, `Duplicate name "${name}": all declared names share one namespace.`);
     }
     declaredNames.add(name);
-    if (/^(Glim|Snd_|Curve_|Shape_|CHG_|__)/.test(name) || RESERVED_NAMES.has(name)) {
+    if (/^(Glim|Snd_|Curve_|Shape_|CHG_|__|KEY_|API_|VC_|VDP_|VRAM_)/.test(name) || RESERVED_NAMES.has(name)) {
       error(
         owner,
         `Reserved name "${name}": it belongs to the generated runtime (${kind}s cannot use Glim*/Snd_*/Curve_*/Shape_*/CHG_*/__* or runtime symbols).`,
@@ -1206,6 +1206,7 @@ const RESERVED_NAMES = new Set([
   ...Array.from({ length: 4 }, (_, bank) => `Changed${bank}`),
   ...Array.from({ length: 4 }, (_, bank) => `Raised${bank}`),
   ...Array.from({ length: 4 }, (_, bank) => `Next${bank}`),
+  'Start',
   'MainLoop',
   'Framebuffer',
   'CurrentCard',
@@ -1217,6 +1218,7 @@ const RESERVED_NAMES = new Set([
   'FbClear',
   'ScanDwellPeriod',
   'ApiScanKeys',
+  'ApiRandom',
   'PortRow',
   'PortRed',
   'PortGreen',
@@ -1257,6 +1259,20 @@ const RESERVED_NAMES = new Set([
   'ShapeWidth',
   'ShapeHeight',
   'ShapeColor',
+  'VdpInit',
+  'VdpSetAddrWrite',
+  'VdpWriteBlock',
+  'VdpFill',
+  'VdpWaitVBlank',
+  'VdpRegInitTbl',
+  'SpriteSet',
+  'SpriteInit',
+  'SpriteShadow',
+  'SpriteDirty',
+  'NamePut',
+  'NameShadow',
+  'NameDirtyRows',
+  'CommitNameRow',
   'ShapeRowMask',
   'ShapeRowIndex',
   'ShapeColIndex',

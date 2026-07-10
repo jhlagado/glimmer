@@ -26,10 +26,12 @@ game-only.
 ## Status
 
 Version 0.2.0 is the language-complete line: everything the headline
-game needs, proven by `examples/tetro.glim` — falling pieces, held-key
+game needs, exercised end to end by `examples/tetro.glim` — falling pieces, held-key
 movement, rotation, line clears, a difficulty curve, and splash /
 pause / game-over screens, written entirely in shipped constructs and
-assembling strict-clean under AZM's register-contract checking.
+assembling strict-clean under AZM's register-contract checking
+(behavioral playtesting under Debug80 is the remaining acceptance
+step, tracked in the release plans).
 
 The language: scalar, array, and typed state (layout types compiled to
 AZM `.type` records), pulses, timers and ramps, held/rising key
@@ -103,10 +105,11 @@ _done:
 end
 ```
 
-Block-local labels (`_done`) are namespaced per effect into ordinary
-globally unique labels in the generated output (`Glim_ApplyIncrement_done`).
-Blocks run when any of their `on` cells changed; `updates` cells are
-marked changed after the block runs.
+Block bodies land in the generated file byte-for-byte verbatim; AZM
+scopes plain labels to their enclosing `@` routine, so every block can
+have its own `_done` (the underscore is a style convention, not
+semantics). Blocks run when any of their `on` cells changed; `updates`
+cells are marked changed after the block runs.
 
 ## Development
 

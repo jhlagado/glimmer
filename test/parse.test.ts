@@ -524,6 +524,27 @@ describe('parseGlimmer', () => {
     expect(program?.states[1]).toMatchObject({ name: 'Bag', typeName: 'Piece', length: 7 });
   });
 
+  it('reserves generated runtime entry names', () => {
+    const source = [
+      'program P',
+      'routine Start',
+      'begin',
+      'end',
+      'routine VdpInit',
+      'begin',
+      'end',
+      'state NameShadow : byte',
+      'pulse KEY_1',
+    ].join('\n');
+    const { program, diagnostics } = parseGlimmer(source);
+    expect(program).toBeNull();
+    const messages = diagnostics.map((d) => d.message).join('\n');
+    expect(messages).toContain('Reserved name "Start"');
+    expect(messages).toContain('Reserved name "VdpInit"');
+    expect(messages).toContain('Reserved name "NameShadow"');
+    expect(messages).toContain('Reserved name "KEY_1"');
+  });
+
   it('parses routines and rejects triggers on them', () => {
     const source = [
       'program P',
@@ -561,7 +582,7 @@ describe('parseGlimmer', () => {
       '    nop',
       'end',
       'card Splash',
-      'effect Start',
+      'effect Launch',
       '    on Go',
       '    goto Playing',
       'end',
@@ -584,9 +605,9 @@ describe('parseGlimmer', () => {
     const byName = new Map(program!.effects.map((e) => [e.name, e]));
     expect(byName.get('Global')?.card).toBeUndefined();
     // Header-only routing block: goto with no begin, empty body.
-    expect(byName.get('Start')).toMatchObject({ card: 'Splash', goto: 'Playing', body: [] });
+    expect(byName.get('Launch')).toMatchObject({ card: 'Splash', goto: 'Playing', body: [] });
     // goto folds into updates so dataflow machinery sees it.
-    expect(byName.get('Start')?.updates).toContain('CurrentCard');
+    expect(byName.get('Launch')?.updates).toContain('CurrentCard');
     // enter: card entry is the trigger.
     expect(byName.get('SetupPlaying')).toMatchObject({ card: 'Playing', enter: true });
     expect(byName.get('SetupPlaying')?.depends).toEqual(['CurrentCard']);

@@ -3,8 +3,8 @@
 ## 0.3.0 - unreleased
 
 The second-display line: the profile architecture derisked while it is
-cheap to change, validated by `examples/sprite-chase.glim` on the
-TEC-Deck TMS9918.
+cheap to change, exercised by `examples/sprite-chase.glim` on the
+TEC-Deck TMS9918 (assembles strict-clean; Debug80 playtest pending).
 
 - Extracted the profile seam (`src/profiles/`): a profile owns equates,
   input/display storage, data tables, the loop skeleton, polling, and
@@ -32,8 +32,9 @@ TEC-Deck TMS9918.
 
 ## 0.2.0 - unreleased
 
-The language-complete line: everything Tetro needs, validated by
-`examples/tetro.glim` playing on shipped constructs only.
+The language-complete line: everything Tetro needs, exercised by
+`examples/tetro.glim` written on shipped constructs only (assembles
+strict-clean; Debug80 playtest pending).
 
 ### Language
 

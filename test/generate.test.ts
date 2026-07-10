@@ -567,7 +567,7 @@ describe('cards', () => {
     'pulse Go',
     'bind key KEY_1 rising -> Go',
     'card Splash',
-    'effect Start',
+    'effect Launch',
     '    on Go',
     '    goto Playing',
     'end',
@@ -602,9 +602,9 @@ describe('cards', () => {
     // Card gates in dispatch.
     expect(source).toContain('cp      Card.Splash');
     expect(source).toContain('cp      Card.Playing');
-    expect(source).toMatch(/cp {6}Card\.Splash\n {8}jr {6}nz,GlimSkip_Start/);
+    expect(source).toMatch(/cp {6}Card\.Splash\n {8}jr {6}nz,GlimSkip_Launch/);
     // goto: transition after the (empty) body.
-    expect(source).toMatch(/@Glim_Start:\n {8}ld {6}a,Card\.Playing {6}; goto Playing\n {8}ld {6}\(CurrentCard\),a/);
+    expect(source).toMatch(/@Glim_Launch:\n {8}ld {6}a,Card\.Playing {6}; goto Playing\n {8}ld {6}\(CurrentCard\),a/);
     // Enter block gated on its card, triggered by CurrentCard's flag.
     expect(source).toContain('; --- enter block SetupPlaying ---');
   });
