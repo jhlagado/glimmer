@@ -20,17 +20,15 @@ import type { EffectDecl, GlimmerDiagnostic, GlimmerProgram, RoutineDecl } from 
 import { generateAzm } from './generate.js';
 import { loadGlimmerProgram } from './load.js';
 
-/** One block body's position in the final (annotated) generated asm. */
+/** One body line's position: generated-asm line -> .glim file/line. */
 export interface BlockLineMapping {
-  /** Effect the mapping belongs to (diagnostics only). */
+  /** Block the line belongs to (diagnostics only). */
   name: string;
-  /** 1-based line of the first body line in the generated asm. */
+  /** 1-based line in the generated asm. */
   asmLine: number;
-  /** Number of body lines. */
-  lineCount: number;
-  /** Map key of the .glim file the body came from. */
+  /** Map key of the .glim file the line came from. */
   glimFile: string;
-  /** 1-based line of the first body line in that .glim file. */
+  /** 1-based line in that .glim file. */
   glimLine: number;
 }
 
@@ -73,12 +71,20 @@ export function mappableBlocks(
   ];
 }
 
+/** A line AZM's annotation pass may insert inside or around a body. */
+function isInjectedAnnotation(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed.startsWith(';!') || trimmed.startsWith('; expects ');
+}
+
 /**
- * Locate every block body in the final generated asm text. The asm is
- * scanned as written to disk — after AZM contract injection — so line
- * numbers agree with the `.d8.json` produced from that same file. Bodies
- * are verified verbatim; a block that does not match is skipped with a
- * warning rather than mapped wrongly.
+ * Locate every block body line in the final generated asm text. The
+ * asm is scanned as written to disk — after AZM contract injection —
+ * so line numbers agree with the `.d8.json` produced from that same
+ * file. Bodies are matched line by line, skipping the annotation lines
+ * AZM may inject (`;!` contracts adjacent to labels and `; expects`
+ * notes at call sites); a body line that does not match is skipped
+ * with a warning rather than mapped wrongly.
  */
 export function computeBlockMappings(
   asmText: string,
@@ -98,27 +104,42 @@ export function computeBlockMappings(
       warnings.push(`block ${block.name}: label ${label} not found in generated asm.`);
       continue;
     }
-    // Contract comments are injected adjacent to @ labels; skip any that
-    // landed between the label and the verbatim body.
-    let start = labelIndex + 1;
-    while (start < lines.length && (lines[start] ?? '').startsWith(';!')) start += 1;
-
-    const matches = block.body.every((bodyLine, k) => lines[start + k] === bodyLine);
-    if (!matches) {
-      warnings.push(`block ${block.name}: body is not verbatim at ${label}; not mapped.`);
-      continue;
+    const glimFile = glimFileKey(block.file);
+    let cursor = labelIndex + 1;
+    let matched = true;
+    const blockMappings: BlockLineMapping[] = [];
+    for (let k = 0; k < block.body.length; k += 1) {
+      while (
+        cursor < lines.length &&
+        lines[cursor] !== block.body[k] &&
+        isInjectedAnnotation(lines[cursor] ?? '')
+      ) {
+        cursor += 1;
+      }
+      if (lines[cursor] !== block.body[k]) {
+        warnings.push(`block ${block.name}: body is not verbatim at ${label}; not mapped.`);
+        matched = false;
+        break;
+      }
+      blockMappings.push({
+        name: block.name,
+        asmLine: cursor + 1,
+        glimFile,
+        glimLine: block.bodyLine + k,
+      });
+      cursor += 1;
     }
-    if (block.body.length === 0) continue;
-    mappings.push({
-      name: block.name,
-      asmLine: start + 1,
-      lineCount: block.body.length,
-      glimFile: glimFileKey(block.file),
-      glimLine: block.bodyLine,
-    });
+    if (matched) mappings.push(...blockMappings);
   }
 
   return { mappings, warnings };
+}
+
+/** Fast lookup from a generated-asm line to its .glim origin. */
+export function mappingByAsmLine(
+  mappings: readonly BlockLineMapping[],
+): Map<number, BlockLineMapping> {
+  return new Map(mappings.map((mapping) => [mapping.asmLine, mapping]));
 }
 
 interface D8Segment {
@@ -152,22 +173,20 @@ export function rewriteD8Map(
   const asmEntry = map.files?.[asmFileKey];
   if (asmEntry?.segments === undefined || mappings.length === 0) return { moved: 0 };
 
+  const byLine = mappingByAsmLine(mappings);
   const kept: D8Segment[] = [];
   const movedByFile = new Map<string, D8Segment[]>();
   let moved = 0;
 
   for (const segment of asmEntry.segments) {
     const line = segment.line;
-    const mapping =
-      typeof line === 'number'
-        ? mappings.find((m) => line >= m.asmLine && line < m.asmLine + m.lineCount)
-        : undefined;
-    if (mapping === undefined || typeof line !== 'number') {
+    const mapping = typeof line === 'number' ? byLine.get(line) : undefined;
+    if (mapping === undefined) {
       kept.push(segment);
       continue;
     }
     const glimSegments = movedByFile.get(mapping.glimFile) ?? [];
-    glimSegments.push({ ...segment, line: mapping.glimLine + (line - mapping.asmLine) });
+    glimSegments.push({ ...segment, line: mapping.glimLine });
     movedByFile.set(mapping.glimFile, glimSegments);
     moved += 1;
   }
@@ -301,17 +320,17 @@ function reattributeDiagnostics(
     (declared) => path.resolve(entryDir, declared ?? entryBase),
   );
   if (mappings.length === 0) return diagnostics;
+  const byLine = mappingByAsmLine(mappings);
   const asmResolved = path.resolve(asmPath);
   return diagnostics.map((diagnostic) => {
     if (diagnostic.line === undefined) return diagnostic;
     if (path.resolve(diagnostic.sourceName) !== asmResolved) return diagnostic;
-    const line = diagnostic.line;
-    const mapping = mappings.find((m) => line >= m.asmLine && line < m.asmLine + m.lineCount);
+    const mapping = byLine.get(diagnostic.line);
     if (mapping === undefined) return diagnostic;
     return {
       ...diagnostic,
       sourceName: mapping.glimFile,
-      line: mapping.glimLine + (line - mapping.asmLine),
+      line: mapping.glimLine,
     };
   });
 }

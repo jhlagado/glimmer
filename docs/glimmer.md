@@ -146,6 +146,13 @@ marks the cell as already changed when the program starts, so effects
 that depend on it run on the first frame — the standard way to get an
 initial draw.
 
+Word cells are deliberately narrow (P7, closed 2026-07-11): they
+store (`.dw`), carry an ordinary change flag, load into HL, and compare
+with 16-bit arithmetic in bodies — Tetro's `Score` is the worked
+example — and `timer ... : word` gives long countdowns. No runtime
+widget beyond that is word-aware (ramps and curves are byte-valued by
+design) until a real program needs one.
+
 `byte[N]` declares byte array state. It emits initialized storage
 (`.ds N, 0`), has one change flag for the whole array name, and is legal
 in both `on` and `updates`. Glimmer does not add indexing syntax:

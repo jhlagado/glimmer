@@ -2,9 +2,9 @@
 ; Declarations here; the cards and blocks live in tetro-rules.glim;
 ; the piece tables and collision engine are a hand-written AZM module.
 ;
-; First cut simplifications vs the corpus game (noted in the 0.2 plan):
-; instant line clear (no flash animation), no LCD messaging (matrix +
-; HUD score only), no next-piece preview, no game-over key gate.
+; Corpus parity (0.4): line-clear flash with a hold timer, LCD
+; messages and the next-piece preview via text resources, any-key
+; splash exit and gated restart.
 
 program Tetro
 
@@ -23,6 +23,8 @@ state CurRotation    : byte
 state NextPieceIndex : byte
 state Score          : word
 state LinesCleared   : byte
+state ClearMask      : byte         ; rows mid-flash (white); gravity pauses
+state Armed          : byte         ; game-over gate open: restart allowed
 state BoardRows      : byte[8]      ; occupancy bitmap, MSB-left
 state BoardRed       : byte[8]      ; colour planes
 state BoardGreen     : byte[8]
@@ -35,12 +37,16 @@ pulse MoveRightP
 pulse SoftDropP
 pulse RotateP
 pulse PauseP
-pulse StartP
+pulse AnyKeyP
 pulse GravityFire
+pulse ClearTick
+pulse GateOpenP
 
 ; --- timers ---
 
-timer Gravity : byte = 32 -> GravityFire   ; writable: difficulty curve
+timer Gravity   : byte = 32  -> GravityFire   ; writable: difficulty curve
+timer ClearHold : byte = 0   -> ClearTick once  ; armed by a line clear
+timer GOverGate : word = 0   -> GateOpenP once  ; armed on game over
 
 ; --- input (corpus PollInput + HandleHeldDir, as declarations) ---
 
@@ -50,7 +56,7 @@ bind key KEY_2  held period 3  -> SoftDropP
 bind key KEY_5  rising -> RotateP
 bind key KEY_AD rising -> RotateP
 bind key KEY_0  rising -> PauseP
-bind key KEY_GO rising -> StartP
+bind key any    rising -> AnyKeyP
 
 ; --- pieces (corpus data.asm bitmaps, as rotational shape resources) ---
 ; Declaration order is the piece index: ShapeId_PieceI = 0 .. PieceL = 6.
@@ -132,6 +138,16 @@ shape PieceL color yellow
        ".X"
        "XX"
 end
+
+; --- LCD messages (corpus data.asm strings) ---
+
+text MsgSplash "TETRO (PRESS A KEY)"
+text MsgRun    "TETRO RUNNING"
+text MsgPause  "TETRO PAUSED"
+text MsgOver   "TETRO GAME OVER"
+text MsgPress  "PRESS ANY KEY"
+text MsgNext   "NEXT: "
+text PieceNames "IOTSZJL"          ; LCD preview letters, ShapeId order
 
 ; --- sounds (corpus sound.asm cues) ---
 

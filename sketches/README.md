@@ -42,7 +42,7 @@ that is a numbered format proposal, catalogued below and folded into the
   blocks (collision checks, geometry) that are not effects — no
   triggers, no dispatch, just a named, contract-carrying routine many
   effects call.
-- **P6 — Resources.** Declarative data compiled to `.db` tables:
+- **P6 — Resources** (landed 2026-07-10/11: shapes incl. rotations, sounds, curves, sprites, tiles, text + lcd_row/sprite_at/tile_at ops; LCD scripts remain out)**.** Declarative data compiled to `.db` tables:
   `shape` (pixel-art rows with a colour), `sound` (duration + divider,
   generating a trigger routine), `text` (LCD strings). Pixel rows are
   written as ASCII art (`"..XX...."`), which is both readable and
@@ -52,7 +52,7 @@ that is a numbered format proposal, catalogued below and folded into the
   (`op lcd_row(msg imm16, row imm8)`) and expand inline, so effect
   bodies invoke them as ordinary AZM. Glimmer adds no macro system of
   its own.
-- **P7 — Word semantics.** 16-bit compares in ordinary effect code
+- **P7 — Word semantics** (closed 2026-07-11: documented as deliberately narrow)**.** 16-bit compares in ordinary effect code
   (score thresholds) and word cells in `updates`. Already half-present in
   v0 (word storage), needs change-flag semantics defined.
 - **P9 — Curves and ramps (easing).** Three orthogonal pieces composing

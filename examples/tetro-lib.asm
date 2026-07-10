@@ -233,6 +233,33 @@ _top:
         pop     de
         ret
 
+; Bitmask of full rows (bit r = row r is $FF), without collapsing —
+; the flash phase shows them before FinishClear collapses.
+;! out A; clobbers F
+@FullRowsMask:
+        ld      c,0                  ; mask
+        ld      b,8
+        ld      hl,BoardRows
+_scan:
+        ld      a,(hl)
+        inc     a                    ; $FF -> 0
+        jr      nz,_next
+        ld      a,c
+        scf
+        rla                          ; shift in a 1 for this row
+        ld      c,a
+        jr      _step
+_next:
+        ld      a,c
+        or      a
+        rla                          ; shift in a 0
+        ld      c,a
+_step:
+        inc     hl
+        djnz    _scan
+        ld      a,c
+        ret
+
 ; Clear every full row, collapsing the planes down. Out: A = rows
 ; cleared (0..4).
 ;! out A,E,carry; clobbers zero,sign,parity,halfCarry
@@ -340,7 +367,7 @@ _loop:
 ; Rebuild the framebuffer from the board planes, then overlay the
 ; active piece in its colour. Row-major: each matrix row is R,G,B,aux
 ; bytes at Framebuffer + row*4, MSB-left like the planes.
-;! out A,zero; clobbers carry,sign,parity,halfCarry
+;! out DE,A,C,zero; clobbers carry,sign,parity,halfCarry
 @DrawBoardFb:
         ld      a,(PlayerX)
         ld      (ShiftCount),a
@@ -420,6 +447,28 @@ _green:
         or      c
 _blue:
         ld      (de),a
+        ; flash overlay: a row mid-clear shows white on every plane.
+        ; Test bit B of ClearMask by shifting it right B times.
+        ld      a,(ClearMask)
+        ld      c,b
+        inc     c
+_flashbit:
+        dec     c
+        jr      z,_flashtest
+        rra
+        jr      _flashbit
+_flashtest:
+        rra                          ; bit for row B into carry
+        jr      nc,_noflash
+        ld      a,$FF
+        ld      (de),a               ; blue (DE still points here)
+        dec     de
+        ld      (de),a               ; green
+        dec     de
+        ld      (de),a               ; red
+        inc     de
+        inc     de
+_noflash:
         inc     b
         ld      a,b
         cp      8

@@ -106,7 +106,7 @@ The corpus "press any key" pattern (splash exit, game-over restart),
 currently approximated with GO. Matrix and VDP profiles share the
 MON-3 poll, so this lands once in mon3-input.
 
-## 6. Game parity — the acceptance tests grow up
+## 6. Game parity — ✅ landed 2026-07-11 (Tetro; sprite-chase landed with item 3)
 
 - **Tetro**: line-clear flash (`ClearMask` + `ClearHold` timer),
   next-piece preview (LCD via text resources, matching the corpus),
@@ -118,7 +118,7 @@ MON-3 poll, so this lands once in mon3-input.
 - Both remain strict-clean and snapshot-covered; playtest findings from
   0.2/0.3 get fixed here.
 
-## 7. P7 word semantics — document and close
+## 7. P7 word semantics — ✅ closed 2026-07-11 (documented in the spec)
 
 Word cells store, flag, and compare correctly (Tetro's Score). 0.4
 closes P7 in the spec as deliberately narrow: no word-aware widgets
@@ -150,3 +150,20 @@ sprite/tile resources + ops → sprite-chase shrink → text/LCD + any-key
 tag). Resources before parity so the games consume declarations, not
 the other way around; seeds first because they immediately harden every
 routine the resource work touches.
+
+## Status — 2026-07-11: complete except the parked seeds
+
+Items 2–7 landed in one arc: multi-rotation shapes (Tetro's pieces are
+declarations; the generated tables are the corpus data byte-for-byte),
+sprite/tile resources with the first Glimmer-emitted AZM ops
+(sprite-chase is pure declarations; chase-lib deleted), text resources
+with the LCD slice and lcd_row, bind key any, Tetro at corpus parity
+(flash via ClearMask + an idle-start once timer, LCD messages, NEXT
+preview via a text resource + charToLcd, the gated any-key restart
+using conditional navigation), and P7 closed as documented-and-narrow.
+Item 1 (contract seeds) stays parked on the AZM verification proposal.
+Findings this arc: once timers may start at 0 (idle until armed —
+validation relaxed); AZM's annotation also injects '; expects' notes at
+call sites inside bodies, so the map/diagnostic line-matching became
+per-line and annotation-tolerant. Remaining before John calls the
+release: playtests (now three games) and the editorial docs pass.

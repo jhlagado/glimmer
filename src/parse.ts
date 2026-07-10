@@ -432,7 +432,11 @@ export function parseUnit(
         continue;
       }
       const initial = parseNumber(match[3] as string);
-      if (initial === null || initial < 1) {
+      const once = match[5] !== undefined;
+      // A once timer may start at 0: idle until code writes the
+      // countdown (the armed-on-demand pattern). Oscillators need a
+      // real period.
+      if (initial === null || (!once && initial < 1)) {
         error(lineNo, `Timer ${match[1]}: period must be a number of at least 1.`);
         continue;
       }
@@ -441,7 +445,7 @@ export function parseUnit(
         type: match[2] as TimerDecl['type'],
         initial,
         target: match[4] as string,
-        once: match[5] !== undefined,
+        once,
         line: lineNo,
       });
       continue;

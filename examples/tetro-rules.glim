@@ -10,6 +10,7 @@ enter SplashShow
 begin
     call FbClear
     call HudBlankDig
+    lcd_row MsgSplash, LcdRow1
 end
 
 render SplashTwinkle
@@ -41,7 +42,7 @@ _color:
 end
 
 effect SplashExit
-    on StartP
+    on AnyKeyP
     goto Playing
 end
 
@@ -50,10 +51,26 @@ card Playing
 enter StartRound
     updates BoardRows, BoardRed, BoardGreen, BoardBlue, Score
     updates PlayerX, PlayerY, CurPieceIndex, CurRotation, NextPieceIndex
-    updates LinesCleared
+    updates LinesCleared, ClearMask
 begin
+    lcd_row MsgRun, LcdRow1
     call InitGame
     call SpawnPiece      ; empty board: the spawn probe cannot block
+end
+
+; Corpus NEXT preview: the piece letter after "NEXT: " on LCD row 2.
+render ShowPreview
+    on NextPieceIndex
+begin
+    lcd_row MsgNext, LcdRow2
+    ld hl,PieceNames
+    ld a,(NextPieceIndex)
+    ld e,a
+    ld d,0
+    add hl,de
+    ld a,(hl)
+    ld c,ApiCharToLcd
+    rst $10
 end
 
 effect ApplyMove
@@ -112,9 +129,12 @@ end
 effect ApplyGravity
     on GravityFire, SoftDropP
     updates PlayerY, BoardRows, BoardRed, BoardGreen, BoardBlue
-    updates Score, LinesCleared, CurrentCard
+    updates ClearMask, ClearHold, CurrentCard
     updates PlayerX, CurPieceIndex, CurRotation, NextPieceIndex
 begin
+    ld a,(ClearMask)     ; rows mid-flash: gravity holds
+    or a
+    jp nz,_done
     ld a,(PlayerX)
     ld d,a
     ld a,(PlayerY)
@@ -128,19 +148,16 @@ begin
 _lock:
     call LockPiece
     call Snd_Lock
-    call ClearFullRows   ; A = rows cleared
+    call FullRowsMask    ; A = bitmask of full rows
     or a
     jr z,_spawn
-    ld b,a
-    ld a,(LinesCleared)
-    add a,b
-    ld (LinesCleared),a
-    ld a,b
-    call ScoreForClears  ; DE = delta
-    ld hl,(Score)
-    add hl,de
-    ld (Score),hl
+    ld (ClearMask),a     ; flash first; FinishClear collapses on the tick
+    ld a,200
+    ld (PlayerY),a       ; park the locked piece off the draw overlay
+    ld a,24              ; arm the hold timer (corpus LineClearHold)
+    ld (ClearHold),a
     call Snd_Clear
+    jp _done
 _spawn:
     call SpawnPiece
     jr nc,_done          ; spawn blocked: the stack reached the top
@@ -150,7 +167,33 @@ _spawn:
     ; change mark cannot re-run them.
     ld a,Card.GameOver
     ld (CurrentCard),a
-    call Snd_Over
+_done:
+end
+
+; The flash hold expired: collapse the rows, score, spawn the next
+; piece — the back half of the corpus lock sequence.
+effect FinishClear
+    on ClearTick
+    updates BoardRows, BoardRed, BoardGreen, BoardBlue, ClearMask
+    updates Score, LinesCleared, CurrentCard
+    updates PlayerX, PlayerY, CurPieceIndex, CurRotation, NextPieceIndex
+begin
+    xor a
+    ld (ClearMask),a
+    call ClearFullRows   ; A = rows collapsed (the flashed ones)
+    ld b,a
+    ld a,(LinesCleared)
+    add a,b
+    ld (LinesCleared),a
+    ld a,b
+    call ScoreForClears  ; DE = delta
+    ld hl,(Score)
+    add hl,de
+    ld (Score),hl
+    call SpawnPiece
+    jr nc,_done
+    ld a,Card.GameOver
+    ld (CurrentCard),a
 _done:
 end
 
@@ -174,7 +217,7 @@ effect Pause
 end
 
 render DrawBoard
-    on BoardRows, PlayerX, PlayerY, CurRotation, CurPieceIndex
+    on BoardRows, PlayerX, PlayerY, CurRotation, CurPieceIndex, ClearMask
 begin
     call DrawBoardFb
 end
@@ -188,12 +231,39 @@ end
 
 card Paused
 
+enter PausedShow
+begin
+    lcd_row MsgPause, LcdRow1
+end
+
 effect Unpause
     on PauseP
     goto Playing
+begin
+    lcd_row MsgRun, LcdRow1
 end
 
 card GameOver
+
+enter GameOverShow
+    updates Armed, GOverGate
+begin
+    lcd_row MsgOver, LcdRow1
+    call Snd_Over
+    xor a
+    ld (Armed),a         ; close the gate
+    ld hl,384            ; corpus GOverGateTicks: arm the once timer
+    ld (GOverGate),hl
+end
+
+effect OpenGate
+    on GateOpenP
+    updates Armed
+begin
+    lcd_row MsgPress, LcdRow2
+    ld a,1
+    ld (Armed),a
+end
 
 render GameOverPulse
     on FrameCount
@@ -209,7 +279,15 @@ begin
 _done:
 end
 
+; Conditional navigation: restart only once the gate is open.
 effect Restart
-    on StartP
-    goto Splash
+    on AnyKeyP
+    updates CurrentCard
+begin
+    ld a,(Armed)
+    or a
+    jr z,_done
+    ld a,Card.Splash
+    ld (CurrentCard),a
+_done:
 end

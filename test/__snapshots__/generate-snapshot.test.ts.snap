@@ -3036,6 +3036,15 @@ COLOR_CYAN        .equ COLOR_GREEN + COLOR_BLUE
 COLOR_MAGENTA     .equ COLOR_RED + COLOR_BLUE
 COLOR_WHITE       .equ $07
 
+; --- MON-3 LCD (board hardware) ---
+ApiStringToLcd    .equ 13   ; HL = string; destroys A,HL
+ApiCharToLcd      .equ 14   ; A = character
+ApiCommandToLcd   .equ 15   ; B = instruction byte
+LcdRow1           .equ $80
+LcdRow2           .equ $C0
+LcdRow3           .equ $94
+LcdRow4           .equ $D4
+
 ; --- MON-3 key codes ---
 KEY_4             .equ $04
 KEY_6             .equ $06
@@ -3043,7 +3052,7 @@ KEY_2             .equ $02
 KEY_5             .equ $05
 KEY_AD            .equ $13
 KEY_0             .equ $00
-KEY_GO            .equ $12
+any               .equ $00
 
 ; --- change flags ---
 CHG_PLAYERX_BIT   .equ 0
@@ -3053,19 +3062,23 @@ CHG_CURROTATION_BIT .equ 3
 CHG_NEXTPIECEINDEX_BIT .equ 4
 CHG_SCORE_BIT     .equ 5
 CHG_LINESCLEARED_BIT .equ 6
-CHG_BOARDROWS_BIT .equ 7
-CHG_BOARDRED_BIT  .equ 0
-CHG_BOARDGREEN_BIT .equ 1
-CHG_BOARDBLUE_BIT .equ 2
-CHG_MOVELEFTP_BIT .equ 3
-CHG_MOVERIGHTP_BIT .equ 4
-CHG_SOFTDROPP_BIT .equ 5
-CHG_ROTATEP_BIT   .equ 6
-CHG_PAUSEP_BIT    .equ 7
-CHG_STARTP_BIT    .equ 0
-CHG_GRAVITYFIRE_BIT .equ 1
-CHG_CURRENTCARD_BIT .equ 2
-CHG_FRAMECOUNT_BIT .equ 3
+CHG_CLEARMASK_BIT .equ 7
+CHG_ARMED_BIT     .equ 0
+CHG_BOARDROWS_BIT .equ 1
+CHG_BOARDRED_BIT  .equ 2
+CHG_BOARDGREEN_BIT .equ 3
+CHG_BOARDBLUE_BIT .equ 4
+CHG_MOVELEFTP_BIT .equ 5
+CHG_MOVERIGHTP_BIT .equ 6
+CHG_SOFTDROPP_BIT .equ 7
+CHG_ROTATEP_BIT   .equ 0
+CHG_PAUSEP_BIT    .equ 1
+CHG_ANYKEYP_BIT   .equ 2
+CHG_GRAVITYFIRE_BIT .equ 3
+CHG_CLEARTICK_BIT .equ 4
+CHG_GATEOPENP_BIT .equ 5
+CHG_CURRENTCARD_BIT .equ 6
+CHG_FRAMECOUNT_BIT .equ 7
 CHG_PLAYERX       .equ %00000001
 CHG_PLAYERY       .equ %00000010
 CHG_CURPIECEINDEX .equ %00000100
@@ -3073,36 +3086,46 @@ CHG_CURROTATION   .equ %00001000
 CHG_NEXTPIECEINDEX .equ %00010000
 CHG_SCORE         .equ %00100000
 CHG_LINESCLEARED  .equ %01000000
-CHG_BOARDROWS     .equ %10000000
-CHG_BOARDRED      .equ %00000001
-CHG_BOARDGREEN    .equ %00000010
-CHG_BOARDBLUE     .equ %00000100
-CHG_MOVELEFTP     .equ %00001000
-CHG_MOVERIGHTP    .equ %00010000
-CHG_SOFTDROPP     .equ %00100000
-CHG_ROTATEP       .equ %01000000
-CHG_PAUSEP        .equ %10000000
-CHG_STARTP        .equ %00000001
-CHG_GRAVITYFIRE   .equ %00000010
-CHG_CURRENTCARD   .equ %00000100
-CHG_FRAMECOUNT    .equ %00001000
+CHG_CLEARMASK     .equ %10000000
+CHG_ARMED         .equ %00000001
+CHG_BOARDROWS     .equ %00000010
+CHG_BOARDRED      .equ %00000100
+CHG_BOARDGREEN    .equ %00001000
+CHG_BOARDBLUE     .equ %00010000
+CHG_MOVELEFTP     .equ %00100000
+CHG_MOVERIGHTP    .equ %01000000
+CHG_SOFTDROPP     .equ %10000000
+CHG_ROTATEP       .equ %00000001
+CHG_PAUSEP        .equ %00000010
+CHG_ANYKEYP       .equ %00000100
+CHG_GRAVITYFIRE   .equ %00001000
+CHG_CLEARTICK     .equ %00010000
+CHG_GATEOPENP     .equ %00100000
+CHG_CURRENTCARD   .equ %01000000
+CHG_FRAMECOUNT    .equ %10000000
 
 ; --- block trigger masks ---
 GlimDep_SplashShow__B2 .equ CHG_CURRENTCARD
 GlimDep_SplashTwinkle__B2 .equ CHG_FRAMECOUNT
-GlimDep_SplashExit__B2 .equ CHG_STARTP
+GlimDep_SplashExit__B2 .equ CHG_ANYKEYP
 GlimDep_StartRound__B2 .equ CHG_CURRENTCARD
+GlimDep_ShowPreview__B0 .equ CHG_NEXTPIECEINDEX
 GlimDep_ApplyMove__B1 .equ CHG_MOVELEFTP + CHG_MOVERIGHTP
-GlimDep_ApplyRotate__B1 .equ CHG_ROTATEP
+GlimDep_ApplyRotate__B2 .equ CHG_ROTATEP
 GlimDep_ApplyGravity__B1 .equ CHG_SOFTDROPP
 GlimDep_ApplyGravity__B2 .equ CHG_GRAVITYFIRE
+GlimDep_FinishClear__B2 .equ CHG_CLEARTICK
 GlimDep_DifficultyCurve__B0 .equ CHG_SCORE
-GlimDep_Pause__B1 .equ CHG_PAUSEP
-GlimDep_DrawBoard__B0 .equ CHG_BOARDROWS + CHG_PLAYERX + CHG_PLAYERY + CHG_CURROTATION + CHG_CURPIECEINDEX
+GlimDep_Pause__B2 .equ CHG_PAUSEP
+GlimDep_DrawBoard__B0 .equ CHG_PLAYERX + CHG_PLAYERY + CHG_CURROTATION + CHG_CURPIECEINDEX + CHG_CLEARMASK
+GlimDep_DrawBoard__B1 .equ CHG_BOARDROWS
 GlimDep_DrawScore__B0 .equ CHG_SCORE
-GlimDep_Unpause__B1 .equ CHG_PAUSEP
+GlimDep_PausedShow__B2 .equ CHG_CURRENTCARD
+GlimDep_Unpause__B2 .equ CHG_PAUSEP
+GlimDep_GameOverShow__B2 .equ CHG_CURRENTCARD
+GlimDep_OpenGate__B2 .equ CHG_GATEOPENP
 GlimDep_GameOverPulse__B2 .equ CHG_FRAMECOUNT
-GlimDep_Restart__B2 .equ CHG_STARTP
+GlimDep_Restart__B2 .equ CHG_ANYKEYP
 
 ; --- cards ---
 ; Exactly one card is active; CurrentCard holds it. Blocks in a
@@ -3117,6 +3140,8 @@ CurRotation:      .db 0
 NextPieceIndex:   .db 0
 Score:            .dw 0
 LinesCleared:     .db 0
+ClearMask:        .db 0
+Armed:            .db 0
 BoardRows:        .ds 8, 0   ; byte array
 BoardRed:         .ds 8, 0   ; byte array
 BoardGreen:       .ds 8, 0   ; byte array
@@ -3126,10 +3151,14 @@ MoveRightP:       .db 0
 SoftDropP:        .db 0
 RotateP:          .db 0
 PauseP:           .db 0
-StartP:           .db 0
+AnyKeyP:          .db 0
 GravityFire:      .db 0
+ClearTick:        .db 0
+GateOpenP:        .db 0
 Gravity:          .db 32   ; period (writable)
 Glim_Gravity_cnt: .db 32
+ClearHold:        .db 0   ; one-shot countdown
+GOverGate:        .dw 0   ; one-shot countdown
 CurrentCard:      .db Card.Splash   ; writable next card, starts changed
 GlimActiveCard:   .db Card.Splash   ; frame-latched card all gates test
 GlimPrevCard:     .db $FF          ; enter edge detector ($FF = before any card)
@@ -3138,7 +3167,7 @@ Glim_HeldKey:     .db $FF
 Glim_HeldCount:   .db 0
 Changed0:         .db %00000000   ; flags dispatch tests
 Changed1:         .db %00000000   ; flags dispatch tests
-Changed2:         .db %00000100   ; flags dispatch tests
+Changed2:         .db %01000000   ; flags dispatch tests
 Raised0:          .db 0   ; raises for later phases this frame
 Raised1:          .db 0   ; raises for later phases this frame
 Raised2:          .db 0   ; raises for later phases this frame
@@ -3152,6 +3181,22 @@ SndDivReload:     .db 0
 SndDivCount:      .db 0
 HudScanIndex:     .db 0
 HudSegBuffer:     .ds 6
+
+; --- text resources (zero-terminated LCD strings) ---
+MsgSplash:
+        .db     "TETRO (PRESS A KEY)", 0
+MsgRun:
+        .db     "TETRO RUNNING", 0
+MsgPause:
+        .db     "TETRO PAUSED", 0
+MsgOver:
+        .db     "TETRO GAME OVER", 0
+MsgPress:
+        .db     "PRESS ANY KEY", 0
+MsgNext:
+        .db     "NEXT: ", 0
+PieceNames:
+        .db     "IOTSZJL", 0
 
 ; --- rotational shape resources ---
 ; Table layout matches the corpus piece engine: index a shape by
@@ -3375,6 +3420,11 @@ __HeldNext_MoveRightP_KEY_6:
 __HeldNext_SoftDropP_KEY_2:
         ret
 __PollNewPress:
+        ld      a,1                  ; any key
+        ld      (AnyKeyP),a
+        ld      a,(Changed2)
+        or      CHG_ANYKEYP
+        ld      (Changed2),a
         ld      a,b
         cp      KEY_4
         jr      nz,__NewNext_MoveLeftP_KEY_4
@@ -3422,9 +3472,9 @@ __NewNext_SoftDropP_KEY_2:
         jr      nz,__NewNext_RotateP_KEY_5
         ld      a,1
         ld      (RotateP),a
-        ld      a,(Changed1)
+        ld      a,(Changed2)
         or      CHG_ROTATEP
-        ld      (Changed1),a
+        ld      (Changed2),a
         ret
 __NewNext_RotateP_KEY_5:
         ld      a,b
@@ -3432,9 +3482,9 @@ __NewNext_RotateP_KEY_5:
         jr      nz,__NewNext_RotateP_KEY_AD
         ld      a,1
         ld      (RotateP),a
-        ld      a,(Changed1)
+        ld      a,(Changed2)
         or      CHG_ROTATEP
-        ld      (Changed1),a
+        ld      (Changed2),a
         ret
 __NewNext_RotateP_KEY_AD:
         ld      a,b
@@ -3442,21 +3492,11 @@ __NewNext_RotateP_KEY_AD:
         jr      nz,__NewNext_PauseP_KEY_0
         ld      a,1
         ld      (PauseP),a
-        ld      a,(Changed1)
-        or      CHG_PAUSEP
-        ld      (Changed1),a
-        ret
-__NewNext_PauseP_KEY_0:
-        ld      a,b
-        cp      KEY_GO
-        jr      nz,__NewNext_StartP_KEY_GO
-        ld      a,1
-        ld      (StartP),a
         ld      a,(Changed2)
-        or      CHG_STARTP
+        or      CHG_PAUSEP
         ld      (Changed2),a
         ret
-__NewNext_StartP_KEY_GO:
+__NewNext_PauseP_KEY_0:
         ret
 
 ; --- timers, ramps, frame counter ---
@@ -3479,6 +3519,33 @@ __NewNext_StartP_KEY_GO:
         or      CHG_GRAVITYFIRE
         ld      (Changed2),a
 __TimerNext_Gravity:
+        ld      a,(ClearHold)
+        or      a
+        jr      z,__TimerNext_ClearHold            ; idle
+        dec     a
+        ld      (ClearHold),a
+        jr      nz,__TimerNext_ClearHold
+        ld      a,1
+        ld      (ClearTick),a
+        ld      a,(Changed2)
+        or      CHG_CLEARTICK
+        ld      (Changed2),a
+__TimerNext_ClearHold:
+        ld      hl,(GOverGate)
+        ld      a,h
+        or      l
+        jr      z,__TimerNext_GOverGate            ; idle
+        dec     hl
+        ld      (GOverGate),hl
+        ld      a,h
+        or      l
+        jr      nz,__TimerNext_GOverGate
+        ld      a,1
+        ld      (GateOpenP),a
+        ld      a,(Changed2)
+        or      CHG_GATEOPENP
+        ld      (Changed2),a
+__TimerNext_GOverGate:
         ret
 
 ; --- derive phase dispatch ---
@@ -3518,6 +3585,28 @@ GlimSkip_SplashShow:
         call    Glim_StartRound
 GlimSkip_StartRound:
         ld      a,(GlimActiveCard)
+        cp      Card.Paused
+        jr      nz,GlimSkip_PausedShow
+        ld      a,(GlimPrevCard)
+        cp      Card.Paused
+        jr      z,GlimSkip_PausedShow
+        ld      a,(Changed2)
+        and     GlimDep_PausedShow__B2
+        jr      z,GlimSkip_PausedShow
+        call    Glim_PausedShow
+GlimSkip_PausedShow:
+        ld      a,(GlimActiveCard)
+        cp      Card.GameOver
+        jr      nz,GlimSkip_GameOverShow
+        ld      a,(GlimPrevCard)
+        cp      Card.GameOver
+        jr      z,GlimSkip_GameOverShow
+        ld      a,(Changed2)
+        and     GlimDep_GameOverShow__B2
+        jr      z,GlimSkip_GameOverShow
+        call    Glim_GameOverShow
+GlimSkip_GameOverShow:
+        ld      a,(GlimActiveCard)
         ld      (GlimPrevCard),a
         ld      a,(GlimActiveCard)
         cp      Card.Splash
@@ -3538,8 +3627,8 @@ GlimSkip_ApplyMove:
         ld      a,(GlimActiveCard)
         cp      Card.Playing
         jr      nz,GlimSkip_ApplyRotate
-        ld      a,(Changed1)
-        and     GlimDep_ApplyRotate__B1
+        ld      a,(Changed2)
+        and     GlimDep_ApplyRotate__B2
         jr      z,GlimSkip_ApplyRotate
         call    Glim_ApplyRotate
 GlimSkip_ApplyRotate:
@@ -3558,20 +3647,36 @@ GlimRun_ApplyGravity:
 GlimSkip_ApplyGravity:
         ld      a,(GlimActiveCard)
         cp      Card.Playing
+        jr      nz,GlimSkip_FinishClear
+        ld      a,(Changed2)
+        and     GlimDep_FinishClear__B2
+        jr      z,GlimSkip_FinishClear
+        call    Glim_FinishClear
+GlimSkip_FinishClear:
+        ld      a,(GlimActiveCard)
+        cp      Card.Playing
         jr      nz,GlimSkip_Pause
-        ld      a,(Changed1)
-        and     GlimDep_Pause__B1
+        ld      a,(Changed2)
+        and     GlimDep_Pause__B2
         jr      z,GlimSkip_Pause
         call    Glim_Pause
 GlimSkip_Pause:
         ld      a,(GlimActiveCard)
         cp      Card.Paused
         jr      nz,GlimSkip_Unpause
-        ld      a,(Changed1)
-        and     GlimDep_Unpause__B1
+        ld      a,(Changed2)
+        and     GlimDep_Unpause__B2
         jr      z,GlimSkip_Unpause
         call    Glim_Unpause
 GlimSkip_Unpause:
+        ld      a,(GlimActiveCard)
+        cp      Card.GameOver
+        jr      nz,GlimSkip_OpenGate
+        ld      a,(Changed2)
+        and     GlimDep_OpenGate__B2
+        jr      z,GlimSkip_OpenGate
+        call    Glim_OpenGate
+GlimSkip_OpenGate:
         ld      a,(GlimActiveCard)
         cp      Card.GameOver
         jr      nz,GlimSkip_Restart
@@ -3594,10 +3699,23 @@ GlimSkip_Restart:
 GlimSkip_SplashTwinkle:
         ld      a,(GlimActiveCard)
         cp      Card.Playing
+        jr      nz,GlimSkip_ShowPreview
+        ld      a,(Changed0)
+        and     GlimDep_ShowPreview__B0
+        jr      z,GlimSkip_ShowPreview
+        call    Glim_ShowPreview
+GlimSkip_ShowPreview:
+        ld      a,(GlimActiveCard)
+        cp      Card.Playing
         jr      nz,GlimSkip_DrawBoard
         ld      a,(Changed0)
         and     GlimDep_DrawBoard__B0
-        jr      z,GlimSkip_DrawBoard
+        jr      nz,GlimRun_DrawBoard
+        ld      a,(Changed1)
+        and     GlimDep_DrawBoard__B1
+        jr      nz,GlimRun_DrawBoard
+        jr      GlimSkip_DrawBoard
+GlimRun_DrawBoard:
         call    Glim_DrawBoard
 GlimSkip_DrawBoard:
         ld      a,(GlimActiveCard)
@@ -3645,6 +3763,7 @@ GlimSkip_GameOverPulse:
 @Glim_SplashShow:
     call FbClear
     call HudBlankDig
+    lcd_row MsgSplash, LcdRow1
         ret
 
 ; --- render block SplashTwinkle ---
@@ -3685,17 +3804,31 @@ _color:
 
 ; --- enter block StartRound ---
 @Glim_StartRound:
+    lcd_row MsgRun, LcdRow1
     call InitGame
     call SpawnPiece      ; empty board: the spawn probe cannot block
         ld      a,(Raised0)          ; deliver to later phases this frame
-        or      CHG_BOARDROWS + CHG_PLAYERX + CHG_PLAYERY + CHG_CURPIECEINDEX + CHG_CURROTATION + CHG_NEXTPIECEINDEX + CHG_LINESCLEARED
+        or      CHG_PLAYERX + CHG_PLAYERY + CHG_CURPIECEINDEX + CHG_CURROTATION + CHG_NEXTPIECEINDEX + CHG_LINESCLEARED + CHG_CLEARMASK
         ld      (Raised0),a
         ld      a,(Raised1)          ; deliver to later phases this frame
-        or      CHG_BOARDRED + CHG_BOARDGREEN + CHG_BOARDBLUE
+        or      CHG_BOARDROWS + CHG_BOARDRED + CHG_BOARDGREEN + CHG_BOARDBLUE
         ld      (Raised1),a
         ld      a,(Next0)            ; a consumer already ran: defer to next frame
         or      CHG_SCORE
         ld      (Next0),a
+        ret
+
+; --- render block ShowPreview ---
+@Glim_ShowPreview:
+    lcd_row MsgNext, LcdRow2
+    ld hl,PieceNames
+    ld a,(NextPieceIndex)
+    ld e,a
+    ld d,0
+    add hl,de
+    ld a,(hl)
+    ld c,ApiCharToLcd
+    rst $10
         ret
 
 ; --- logic block ApplyMove ---
@@ -3755,6 +3888,9 @@ _done:
 
 ; --- logic block ApplyGravity ---
 @Glim_ApplyGravity:
+    ld a,(ClearMask)     ; rows mid-flash: gravity holds
+    or a
+    jp nz,_done
     ld a,(PlayerX)
     ld d,a
     ld a,(PlayerY)
@@ -3768,19 +3904,16 @@ _done:
 _lock:
     call LockPiece
     call Snd_Lock
-    call ClearFullRows   ; A = rows cleared
+    call FullRowsMask    ; A = bitmask of full rows
     or a
     jr z,_spawn
-    ld b,a
-    ld a,(LinesCleared)
-    add a,b
-    ld (LinesCleared),a
-    ld a,b
-    call ScoreForClears  ; DE = delta
-    ld hl,(Score)
-    add hl,de
-    ld (Score),hl
+    ld (ClearMask),a     ; flash first; FinishClear collapses on the tick
+    ld a,200
+    ld (PlayerY),a       ; park the locked piece off the draw overlay
+    ld a,24              ; arm the hold timer (corpus LineClearHold)
+    ld (ClearHold),a
     call Snd_Clear
+    jp _done
 _spawn:
     call SpawnPiece
     jr nc,_done          ; spawn blocked: the stack reached the top
@@ -3790,13 +3923,42 @@ _spawn:
     ; change mark cannot re-run them.
     ld a,Card.GameOver
     ld (CurrentCard),a
-    call Snd_Over
 _done:
         ld      a,(Raised0)          ; deliver to later phases this frame
-        or      CHG_PLAYERY + CHG_BOARDROWS + CHG_LINESCLEARED + CHG_PLAYERX + CHG_CURPIECEINDEX + CHG_CURROTATION + CHG_NEXTPIECEINDEX
+        or      CHG_PLAYERY + CHG_CLEARMASK + CHG_PLAYERX + CHG_CURPIECEINDEX + CHG_CURROTATION + CHG_NEXTPIECEINDEX
         ld      (Raised0),a
         ld      a,(Raised1)          ; deliver to later phases this frame
-        or      CHG_BOARDRED + CHG_BOARDGREEN + CHG_BOARDBLUE
+        or      CHG_BOARDROWS + CHG_BOARDRED + CHG_BOARDGREEN + CHG_BOARDBLUE
+        ld      (Raised1),a
+        ld      a,(Next2)            ; a consumer already ran: defer to next frame
+        or      CHG_CURRENTCARD
+        ld      (Next2),a
+        ret
+
+; --- logic block FinishClear ---
+@Glim_FinishClear:
+    xor a
+    ld (ClearMask),a
+    call ClearFullRows   ; A = rows collapsed (the flashed ones)
+    ld b,a
+    ld a,(LinesCleared)
+    add a,b
+    ld (LinesCleared),a
+    ld a,b
+    call ScoreForClears  ; DE = delta
+    ld hl,(Score)
+    add hl,de
+    ld (Score),hl
+    call SpawnPiece
+    jr nc,_done
+    ld a,Card.GameOver
+    ld (CurrentCard),a
+_done:
+        ld      a,(Raised0)          ; deliver to later phases this frame
+        or      CHG_CLEARMASK + CHG_LINESCLEARED + CHG_PLAYERX + CHG_PLAYERY + CHG_CURPIECEINDEX + CHG_CURROTATION + CHG_NEXTPIECEINDEX
+        ld      (Raised0),a
+        ld      a,(Raised1)          ; deliver to later phases this frame
+        or      CHG_BOARDROWS + CHG_BOARDRED + CHG_BOARDGREEN + CHG_BOARDBLUE
         ld      (Raised1),a
         ld      a,(Next0)            ; a consumer already ran: defer to next frame
         or      CHG_SCORE
@@ -3838,13 +4000,42 @@ _keep:
     call HudWriteU16
         ret
 
+; --- enter block PausedShow ---
+@Glim_PausedShow:
+    lcd_row MsgPause, LcdRow1
+        ret
+
 ; --- logic block Unpause ---
 @Glim_Unpause:
+    lcd_row MsgRun, LcdRow1
         ld      a,Card.Playing      ; goto Playing
         ld      (CurrentCard),a
         ld      a,(Next2)            ; a consumer already ran: defer to next frame
         or      CHG_CURRENTCARD
         ld      (Next2),a
+        ret
+
+; --- enter block GameOverShow ---
+@Glim_GameOverShow:
+    lcd_row MsgOver, LcdRow1
+    call Snd_Over
+    xor a
+    ld (Armed),a         ; close the gate
+    ld hl,384            ; corpus GOverGateTicks: arm the once timer
+    ld (GOverGate),hl
+        ld      a,(Raised1)          ; deliver to later phases this frame
+        or      CHG_ARMED
+        ld      (Raised1),a
+        ret
+
+; --- logic block OpenGate ---
+@Glim_OpenGate:
+    lcd_row MsgPress, LcdRow2
+    ld a,1
+    ld (Armed),a
+        ld      a,(Raised1)          ; deliver to later phases this frame
+        or      CHG_ARMED
+        ld      (Raised1),a
         ret
 
 ; --- render block GameOverPulse ---
@@ -3862,8 +4053,12 @@ _done:
 
 ; --- logic block Restart ---
 @Glim_Restart:
-        ld      a,Card.Splash      ; goto Splash
-        ld      (CurrentCard),a
+    ld a,(Armed)
+    or a
+    jr z,_done
+    ld a,Card.Splash
+    ld (CurrentCard),a
+_done:
         ld      a,(Next2)            ; a consumer already ran: defer to next frame
         or      CHG_CURRENTCARD
         ld      (Next2),a
@@ -3877,8 +4072,10 @@ _done:
         ld      (SoftDropP),a
         ld      (RotateP),a
         ld      (PauseP),a
-        ld      (StartP),a
+        ld      (AnyKeyP),a
         ld      (GravityFire),a
+        ld      (ClearTick),a
+        ld      (GateOpenP),a
         ld      (Raised0),a
         ld      (Raised1),a
         ld      (Raised2),a
@@ -4160,6 +4357,16 @@ HudDecDone:
         inc     bc
         pop     hl
         ret
+
+; Position the LCD cursor at a row command, then write a string.
+op lcd_row(msg imm16, row imm8)
+        ld      b,row
+        ld      c,ApiCommandToLcd
+        rst     $10
+        ld      hl,msg
+        ld      c,ApiStringToLcd
+        rst     $10
+end
 "
 `;
 

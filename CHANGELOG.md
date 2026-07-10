@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.4.0 - unreleased
+
+The resources-and-parity line: the sketches' data declarations are
+real on both profiles, the first Glimmer-emitted AZM ops appear, and
+the flagship games reach corpus parity (strict-clean; Debug80
+playtests pending).
+
+- Multi-rotation shapes: `rot0`..`rot3` groups (with `rotN = rotM`
+  aliases and cycling defaults) compile to the corpus piece-engine
+  tables — ShapeRot bitmaps, pointer/right-bound/colour tables, and
+  ShapeId equates. Tetro's pieces are seven declarations; its library
+  lost its whole data section.
+- Sprite and tile resources (tms9918): 8x8 declarations compile to
+  pattern tables, slot/index equates (a resource name IS its equate),
+  colour groups by (fg, bg) pair, and a generated LoadResourcesVram.
+  sprite_at and tile_at are AZM op definitions emitted into the
+  generated file; sprite-chase is pure declarations and chase-lib.asm
+  is gone.
+- Text resources and the LCD slice: `text Name "STRING"` emits the
+  zero-terminated string; declaring any text brings LcdRow1..4, the
+  MON-3 LCD call equates, and the lcd_row op (both TEC-1G profiles —
+  the LCD is board hardware).
+- `bind key any rising -> Pulse`: fires on every new press, before and
+  alongside named bindings; rising-only and TEC-1G-only by diagnostic.
+- Tetro at corpus parity: line-clear flash (ClearMask + an idle-start
+  once timer), LCD messages on every card, the NEXT piece preview, and
+  the gated any-key restart (conditional navigation off the gate).
+- `timer ... = 0 -> Pulse once` is legal: an idle countdown armed by
+  writing the cell.
+- The debug-map/diagnostic line matching is per-line and tolerant of
+  AZM's injected annotations (`;!` contracts and `; expects` call-site
+  notes), so annotated bodies keep full .glim attribution.
+- P7 word semantics documented and closed as deliberately narrow.
+- Parked pending an AZM change: `;!` contract seeds from block/routine
+  headers (AZM currently trusts declared contracts without verifying
+  them against the body, and annotation overwrites them — proposal
+  recorded in the 0.4 plan).
+
 ## 0.3.0 - unreleased
 
 The second-display line: the profile architecture derisked while it is
