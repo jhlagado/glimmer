@@ -2,7 +2,7 @@
   "projectVersion": 2,
   "projectPlatform": "tec1g",
   "defaultProfile": "mon3",
-  "defaultTarget": "dot",
+  "defaultTarget": "tetro-glim",
   "profiles": {
     "mon3": {
       "platform": "tec1g",
@@ -48,7 +48,9 @@
       "sourceFile": "examples/dot.main.asm",
       "asm": "examples/dot.main.asm",
       "artifactBase": "dot",
-      "sourceRoots": ["examples"]
+      "sourceRoots": [
+        "examples"
+      ]
     },
     "slide": {
       "outputDir": "build",
@@ -78,7 +80,9 @@
       "sourceFile": "examples/slide.main.asm",
       "asm": "examples/slide.main.asm",
       "artifactBase": "slide",
-      "sourceRoots": ["examples"]
+      "sourceRoots": [
+        "examples"
+      ]
     },
     "trail": {
       "outputDir": "build",
@@ -108,7 +112,9 @@
       "sourceFile": "examples/trail.main.asm",
       "asm": "examples/trail.main.asm",
       "artifactBase": "trail",
-      "sourceRoots": ["examples"]
+      "sourceRoots": [
+        "examples"
+      ]
     },
     "snake": {
       "outputDir": "build",
@@ -138,7 +144,9 @@
       "sourceFile": "examples/snake.main.asm",
       "asm": "examples/snake.main.asm",
       "artifactBase": "snake",
-      "sourceRoots": ["examples"]
+      "sourceRoots": [
+        "examples"
+      ]
     },
     "tetro": {
       "outputDir": "build",
@@ -168,7 +176,9 @@
       "sourceFile": "examples/tetro.main.asm",
       "asm": "examples/tetro.main.asm",
       "artifactBase": "tetro",
-      "sourceRoots": ["examples"]
+      "sourceRoots": [
+        "examples"
+      ]
     },
     "sprite-chase": {
       "outputDir": "build",
@@ -198,7 +208,73 @@
       "sourceFile": "examples/sprite-chase.main.asm",
       "asm": "examples/sprite-chase.main.asm",
       "artifactBase": "sprite-chase",
-      "sourceRoots": ["examples"]
+      "sourceRoots": [
+        "examples"
+      ]
+    },
+    "tetro-glim": {
+      "outputDir": "build",
+      "platform": "tec1g",
+      "profile": "mon3",
+      "tec1g": {
+        "regions": [
+          {
+            "start": 0,
+            "end": 2047,
+            "kind": "rom"
+          },
+          {
+            "start": 2048,
+            "end": 32767,
+            "kind": "ram"
+          },
+          {
+            "start": 49152,
+            "end": 65535,
+            "kind": "rom"
+          }
+        ],
+        "appStart": 16384,
+        "entry": 0
+      },
+      "sourceFile": "examples/tetro.glim",
+      "asm": "examples/tetro.glim",
+      "artifactBase": "tetro",
+      "sourceRoots": [
+        "examples"
+      ]
+    },
+    "sprite-chase-glim": {
+      "outputDir": "build",
+      "platform": "tec1g",
+      "profile": "mon3",
+      "tec1g": {
+        "regions": [
+          {
+            "start": 0,
+            "end": 2047,
+            "kind": "rom"
+          },
+          {
+            "start": 2048,
+            "end": 32767,
+            "kind": "ram"
+          },
+          {
+            "start": 49152,
+            "end": 65535,
+            "kind": "rom"
+          }
+        ],
+        "appStart": 16384,
+        "entry": 0
+      },
+      "sourceFile": "examples/sprite-chase.glim",
+      "asm": "examples/sprite-chase.glim",
+      "artifactBase": "sprite-chase",
+      "sourceRoots": [
+        "examples"
+      ]
     }
   }
 }

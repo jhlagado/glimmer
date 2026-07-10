@@ -471,18 +471,22 @@ it needs address segments attributed to `counter.glim` lines instead of
 The build-orchestration question ("how does Debug80 know to run Glimmer?")
 starts simple: a debug80.json target's `sourceFile` points at the
 generated `.asm`, and Glimmer runs as a pre-build step or watch task.
-Native `.glim` targets in debug80.json — where Debug80 invokes Glimmer
-itself, as it already invokes its bundled AZM — is the eventual form of
-"Glimmer as a Debug80-native type". The API for that exists (2026-07-10):
+Native `.glim` targets are real (Debug80 side landed 2026-07-11):
+Debug80 bundles `@jhlagado/glimmer`, a GlimmerBackend builds `.glim`
+sourceFiles through the in-process API (backend inferred from the
+extension or `"assembler": "glimmer"`), the `glim` language ships
+syntax highlighting with embedded Z80 in bodies plus breakpoint
+support, and this repo's debug80.json carries native `tetro-glim` and
+`sprite-chase-glim` targets (now the default). The API that made it a
+sibling of AzmBackend (2026-07-10):
 `buildGlimmerProgram(entryPath, options)` on the `@jhlagado/glimmer/build`
 subpath runs the whole chain in process with AZM-shaped diagnostics and
 returns artifact paths — the exact mirror of the `@jhlagado/azm/compile`
 API Debug80's AzmBackend already consumes, so a GlimmerBackend is a
-sibling implementation selected by the `.glim` extension. Debug80-side
-prerequisites: bump its bundled AZM (0.2.15) to ^0.2.17 — new Glimmer
-output needs bit-index equates and routine-scoped labels to assemble —
-and add a `glim` language contribution (grammar + the `breakpoints`
-list, or breakpoints cannot be set in `.glim` files at all).
+sibling implementation selected by the `.glim` extension. Both
+prerequisites landed with it: Debug80's AZM is ^0.2.17 (zero test
+fallout) and the `glim` language contribution includes the
+`breakpoints` list.
 
 ## Open questions — answered by the second display (2026-07-10)
 
