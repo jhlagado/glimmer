@@ -37,6 +37,8 @@ import type {
   SoundDecl,
   StateDecl,
   TimerDecl,
+  TypeDecl,
+  TypeFieldDecl,
 } from './model.js';
 import type { ImportDecl } from './model.js';
 import { FRAME_COUNT, TEC1G_KEY_CODES } from './model.js';
@@ -51,7 +53,11 @@ export interface ParseResult {
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const STATE_RE =
-  /^state\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*((?:byte|word)(?:\[\S+\])?)(?:\s*=\s*(\S+))?(\s+changed)?$/;
+  /^state\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Za-z_][A-Za-z0-9_]*(?:\[\S+\])?)(?:\s*=\s*(\S+))?(\s+changed)?$/;
+/** AZM type expression: TypeName or TypeName[N] (byte/word/addr included). */
+const TYPE_EXPR_RE = /^([A-Za-z_][A-Za-z0-9_]*)(?:\[(\d+)\])?$/;
+/** A layout field type: byte/word/addr, a positive byte count, or a type expression. */
+const FIELD_TYPE_RE = /^(?:byte|word|addr|[1-9][0-9]*|[A-Za-z_][A-Za-z0-9_]*(?:\[\d+\])?)$/;
 const BIND_KEY_RE =
   /^bind\s+key\s+([A-Za-z_][A-Za-z0-9_]*)\s+(rising|held\s+period\s+\S+)\s*->\s*([A-Za-z_][A-Za-z0-9_]*)$/;
 const TIMER_RE =
@@ -120,6 +126,7 @@ export interface ParsedUnit {
   display: string | null;
   parts: ImportDecl[];
   imports: ImportDecl[];
+  types: TypeDecl[];
   states: StateDecl[];
   pulses: PulseDecl[];
   timers: TimerDecl[];
@@ -155,6 +162,7 @@ export function parseUnit(
   let programName: string | null = null;
   let platform: string | null = null;
   let display: string | null = null;
+  const types: TypeDecl[] = [];
   const states: StateDecl[] = [];
   const pulses: PulseDecl[] = [];
   const timers: TimerDecl[] = [];
@@ -248,26 +256,39 @@ export function parseUnit(
         error(lineNo, `Invalid state declaration: "${text}".`);
         continue;
       }
-      const [, name, type, initialText, changedFlag] = match;
-      const arrayMatch = /^(byte|word)\[(\S+)\]$/.exec(type as string);
-      let stateType = type as StateDecl['type'];
+      const [, name, typeText, initialText, changedFlag] = match;
+      const typeMatch = /^([A-Za-z_][A-Za-z0-9_]*)(?:\[(\S+)\])?$/.exec(typeText as string);
+      if (!typeMatch) {
+        error(lineNo, `State ${name}: invalid type "${typeText}".`);
+        continue;
+      }
+      const baseType = typeMatch[1] as string;
+      const lengthText = typeMatch[2];
+      const isScalar = baseType === 'byte' || baseType === 'word';
+
       let length: number | undefined;
-      if (arrayMatch) {
-        stateType = arrayMatch[1] as StateDecl['type'];
-        if (stateType !== 'byte') {
+      if (lengthText !== undefined) {
+        if (isScalar && baseType !== 'byte') {
           error(lineNo, `State ${name}: only byte arrays are supported.`);
           continue;
         }
-        if (initialText !== undefined) {
-          error(lineNo, `State ${name}: array initializers are not supported.`);
-          continue;
-        }
-        const parsedLength = parseNumber(arrayMatch[2] as string);
+        const parsedLength = parseNumber(lengthText);
         if (parsedLength === null || parsedLength < 1 || parsedLength > 256) {
           error(lineNo, `State ${name}: array length must be between 1 and 256.`);
           continue;
         }
         length = parsedLength;
+      } else if (typeText !== baseType) {
+        error(lineNo, `State ${name}: invalid type "${typeText}".`);
+        continue;
+      }
+
+      if (initialText !== undefined && (length !== undefined || !isScalar)) {
+        error(
+          lineNo,
+          `State ${name}: ${isScalar ? 'array' : 'typed'} state takes no initializer (storage is zero-filled).`,
+        );
+        continue;
       }
       let initial = 0;
       if (initialText !== undefined) {
@@ -280,13 +301,85 @@ export function parseUnit(
       }
       const state: StateDecl = {
         name: name as string,
-        type: stateType,
+        type: isScalar ? (baseType as StateDecl['type']) : 'byte',
         initial,
         changedOnStart: changedFlag !== undefined,
         line: lineNo,
       };
+      if (!isScalar) state.typeName = baseType;
       if (length !== undefined) state.length = length;
       states.push(state);
+      continue;
+    }
+
+    if (text.startsWith('type ')) {
+      const rest = text.slice('type '.length).trim();
+      const aliasMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(\S+)$/.exec(rest);
+      if (aliasMatch) {
+        const [, name, expr] = aliasMatch;
+        if (!TYPE_EXPR_RE.test(expr as string)) {
+          error(lineNo, `Type ${name}: invalid alias target "${expr}".`);
+          continue;
+        }
+        types.push({ name: name as string, alias: expr as string, fields: [], line: lineNo });
+        continue;
+      }
+      if (!IDENT.test(rest)) {
+        error(lineNo, `Invalid type declaration: "${text}". Expected: type <Name> or type <Name> = <TypeExpr>.`);
+        continue;
+      }
+      // Field lines (name : fieldtype) until a line containing only "end".
+      const fields: TypeFieldDecl[] = [];
+      const fieldNames = new Set<string>();
+      let sawEnd = false;
+      let malformed = false;
+      while (i < lines.length) {
+        const fieldLineNo = i + 1;
+        const fieldText = stripComment(lines[i] ?? '').trim();
+        i += 1;
+        if (fieldText === '') continue;
+        if (fieldText === 'end') {
+          sawEnd = true;
+          break;
+        }
+        // A new top-level statement means the closing `end` was forgotten;
+        // hand the line back rather than swallowing the next declaration.
+        if (
+          /^(program|platform|display|part|import|type|state|pulse|timer|ramp|sound|curve|shape|bind|effect|compute|render|routine|card)\b/.test(
+            fieldText,
+          )
+        ) {
+          i -= 1;
+          break;
+        }
+        const fieldMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(\S+)$/.exec(fieldText);
+        if (!fieldMatch || !FIELD_TYPE_RE.test(fieldMatch[2] as string)) {
+          error(
+            fieldLineNo,
+            `Type ${rest}: invalid field "${fieldText}". Expected: <name> : <byte|word|addr|N|Type[N]>.`,
+          );
+          malformed = true;
+          continue;
+        }
+        const fieldName = fieldMatch[1] as string;
+        if (fieldNames.has(fieldName)) {
+          error(fieldLineNo, `Type ${rest}: duplicate field "${fieldName}".`);
+          malformed = true;
+          continue;
+        }
+        fieldNames.add(fieldName);
+        fields.push({ name: fieldName, type: fieldMatch[2] as string, line: fieldLineNo });
+      }
+      if (!sawEnd) {
+        error(lineNo, `Type ${rest}: missing end.`);
+        continue;
+      }
+      if (fields.length === 0 && !malformed) {
+        error(lineNo, `Type ${rest} has no fields.`);
+        continue;
+      }
+      if (malformed) continue;
+      types.push({ name: rest, fields, line: lineNo });
       continue;
     }
 
@@ -604,6 +697,7 @@ export function parseUnit(
     display,
     parts,
     imports,
+    types,
     states,
     pulses,
     timers,
@@ -632,6 +726,7 @@ export function assembleProgram(units: ParsedUnit[]): ParseResult {
 
   const fileOf = new Map<object, string | undefined>();
   const merged = {
+    types: [] as TypeDecl[],
     states: [] as StateDecl[],
     pulses: [] as PulseDecl[],
     timers: [] as TimerDecl[],
@@ -747,6 +842,7 @@ function splitNames(text: string): string[] {
 function validateReferences(
   parts: Pick<
     GlimmerProgram,
+    | 'types'
     | 'states'
     | 'pulses'
     | 'timers'
@@ -786,6 +882,7 @@ function validateReferences(
     }
   };
 
+  for (const type of parts.types) declare(type, type.name, 'type');
   for (const state of parts.states) declare(state, state.name, 'state');
   for (const pulse of parts.pulses) declare(pulse, pulse.name, 'pulse');
   for (const timer of parts.timers) declare(timer, timer.name, 'timer');
@@ -843,6 +940,71 @@ function validateReferences(
       if (!updateNames.has(target)) {
         error(effect, `Effect ${effect.name} updates undeclared state "${target}".`);
       }
+    }
+  }
+
+  validateTypeReferences(parts.types, parts.states, error);
+}
+
+/** Base name of a field/alias type expression, if it names a layout type. */
+function typeExprBaseName(expr: string): string | undefined {
+  const base = expr.replace(/\[\d+\]$/, '');
+  if (base === 'byte' || base === 'word' || base === 'addr') return undefined;
+  return /^[1-9][0-9]*$/.test(base) ? undefined : base;
+}
+
+function validateTypeReferences(
+  types: readonly TypeDecl[],
+  states: readonly StateDecl[],
+  error: (owner: { line: number }, message: string) => void,
+): void {
+  const typeByName = new Map(types.map((type) => [type.name, type]));
+
+  for (const state of states) {
+    if (state.typeName !== undefined && !typeByName.has(state.typeName)) {
+      error(state, `State ${state.name}: unknown type "${state.typeName}".`);
+    }
+  }
+  for (const type of types) {
+    if (type.alias !== undefined) {
+      const base = typeExprBaseName(type.alias);
+      if (base !== undefined && !typeByName.has(base)) {
+        error(type, `Type ${type.name}: unknown alias target "${type.alias}".`);
+      }
+      continue;
+    }
+    for (const field of type.fields) {
+      const base = typeExprBaseName(field.type);
+      if (base !== undefined && !typeByName.has(base)) {
+        error(type, `Type ${type.name}: field ${field.name} has unknown type "${field.type}".`);
+      }
+    }
+  }
+
+  // Cycles make a layout infinitely sized; catch them here so the
+  // diagnostic points at the .glim line instead of generated AZM.
+  const visiting = new Set<string>();
+  const safe = new Set<string>();
+  const cyclic = new Set<string>();
+  const visit = (name: string): boolean => {
+    if (safe.has(name)) return true;
+    if (visiting.has(name) || cyclic.has(name)) return false;
+    const type = typeByName.get(name);
+    if (type === undefined) return true;
+    visiting.add(name);
+    const exprs = type.alias !== undefined ? [type.alias] : type.fields.map((f) => f.type);
+    let ok = true;
+    for (const expr of exprs) {
+      const base = typeExprBaseName(expr);
+      if (base !== undefined && !visit(base)) ok = false;
+    }
+    visiting.delete(name);
+    (ok ? safe : cyclic).add(name);
+    return ok;
+  };
+  for (const type of types) {
+    if (!visit(type.name)) {
+      error(type, `Type ${type.name} is recursive: a layout cannot contain itself.`);
     }
   }
 }

@@ -13,10 +13,41 @@ export type CellType = 'byte' | 'word';
 export interface StateDecl {
   name: string;
   type: CellType;
-  /** Present for byte arrays declared as state Name : byte[N]. */
+  /**
+   * Present when the cell is typed with a declared layout type
+   * (state Name : TypeName). Storage is a typed `.ds`; `type` and
+   * `initial` do not apply.
+   */
+  typeName?: string;
+  /** Present for arrays: state Name : byte[N] or TypeName[N]. */
   length?: number;
   initial: number;
   changedOnStart: boolean;
+  line: number;
+}
+
+/** One field of a layout type; mirrors an AZM `.type` field. */
+export interface TypeFieldDecl {
+  name: string;
+  /**
+   * Field type as written: 'byte' | 'word' | 'addr', a positive byte
+   * count, or a type expression (TypeName or TypeName[N]).
+   */
+  type: string;
+  line: number;
+}
+
+/**
+ * A layout type, compiled to an AZM Book 0 `.type` record (or
+ * `.typealias` for the alias form). Glimmer names the layout; AZM owns
+ * the type system — `sizeof`, `offset`, and layout casts work on these
+ * in verbatim block bodies.
+ */
+export interface TypeDecl {
+  name: string;
+  /** Alias form (type Name = Expr) — emitted as `.typealias`. */
+  alias?: string;
+  fields: TypeFieldDecl[];
   line: number;
 }
 
@@ -137,6 +168,7 @@ export interface GlimmerProgram {
   platform: string | null;
   /** Display profile, e.g. 'matrix8x8'. Requires a platform. */
   display: string | null;
+  types: TypeDecl[];
   states: StateDecl[];
   pulses: PulseDecl[];
   timers: TimerDecl[];

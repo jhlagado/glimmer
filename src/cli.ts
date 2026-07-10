@@ -53,7 +53,7 @@ export function depsReport(program: GlimmerProgram): string {
   const cells: Array<{ name: string; kind: string }> = [
     ...program.states.map((s) => ({
       name: s.name,
-      kind: `state ${s.type}${s.length !== undefined ? `[${s.length}]` : ''}`,
+      kind: `state ${s.typeName ?? s.type}${s.length !== undefined ? `[${s.length}]` : ''}`,
     })),
     ...program.pulses.map((pu) => ({ name: pu.name, kind: 'pulse' })),
     ...program.timers.map((t) => ({ name: t.name, kind: t.once ? 'timer once' : 'timer' })),

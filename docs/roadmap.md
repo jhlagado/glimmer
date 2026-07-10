@@ -268,9 +268,13 @@ sequential.
   beside `on` and `updates`, and is unconditional once the block runs.
   `begin` opens an optional verbatim AZM body, so header-only routing
   blocks may close directly with `end`.
-- **Structured data via AZM layouts.** Byte arrays stay simple. Future
-  structured state should use AZM Book 0 layout types: `.type`,
-  `.typealias`, typed `.ds`, `sizeof`, and `offset`.
+- **Structured data via AZM layouts. ✅ Landed 2026-07-10.** `type`
+  declarations compile to AZM Book 0 `.type` records (`type Name = Expr`
+  to `.typealias`); typed state (`state Cursor : Point`,
+  `state Pieces : Piece[7]`) reserves typed `.ds` storage with one
+  change flag per cell, byte-array style. `sizeof`/`offset`/layout casts
+  work in bodies as ordinary AZM. Recursive layouts and unknown type
+  references are parse-time diagnostics.
 - **Routines (sketch P5).** `routine Name` callable helper blocks — no
   triggers, no dispatch; snake's hand-written imported module is the
   workaround this removes.

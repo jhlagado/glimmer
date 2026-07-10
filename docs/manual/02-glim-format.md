@@ -74,6 +74,42 @@ ld (hl),%10000000
 
 Array initializers and word arrays are not implemented yet.
 
+## type
+
+```
+type Point
+    x : byte
+    y : byte
+end
+
+type Piece
+    origin : Point
+    rows : 4
+    color : byte
+end
+
+type Bag = Piece[7]
+
+state Cursor : Point changed
+state Pieces : Piece[7]
+```
+
+Declares a memory layout. Glimmer names the layout; AZM owns the type
+system: the declaration compiles to an AZM `.type` record (`type Name =
+Expr` compiles to `.typealias`), so `sizeof`, `offset`, and layout casts
+work on the name inside block bodies as ordinary AZM:
+
+```asm
+ld hl,Cursor + offset(Point, y)
+ld a,sizeof(Piece)
+```
+
+Field types are `byte`, `word`, `addr`, a raw byte count (`rows : 4`),
+or another type — including arrays of types. State declared with a type
+name reserves zero-filled typed storage (`.ds Point, 0`), takes no
+initializer, and carries one change flag for the whole cell, exactly
+like a byte array. Recursive layouts are a parse error.
+
 ## pulse
 
 ```

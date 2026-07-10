@@ -82,6 +82,7 @@ line            ::= blank-line | comment-line | statement
 statement       ::= program-decl
                   | platform-decl
                   | display-decl
+                  | type-decl
                   | state-decl
                   | pulse-decl
                   | timer-decl
@@ -110,12 +111,27 @@ import-decl     ::= "import" string
 platform-decl   ::= "platform" platform-name        ; "tec1g-mon3"
 display-decl    ::= "display" display-name          ; "matrix8x8"
 
+type-decl       ::= "type" identifier newline
+                    type-field*
+                    "end"
+                  | "type" identifier "=" type-expr    ; alias (.typealias)
+type-field      ::= identifier ":" field-type
+field-type      ::= "byte" | "word" | "addr"
+                  | number                             ; byte count
+                  | type-expr
+type-expr       ::= identifier ( "[" number "]" )?
+                  ; compiles to an AZM Book 0 .type record; sizeof/offset/
+                  ; layout casts work on the name in block bodies.
+                  ; Recursive layouts are rejected.
+
 state-decl      ::= "state" identifier ":" cell-type
                     ( "=" number )? ( "changed" )?
                   | "state" identifier ":" array-type ( "changed" )?
+                  | "state" identifier ":" type-expr ( "changed" )?
 cell-type       ::= "byte" | "word"
 array-type      ::= "byte" "[" number "]"
-                  ; one change flag for the whole array; no initializer.
+                  ; arrays and typed state: one change flag for the whole
+                  ; cell; no initializer (storage is zero-filled).
 
 pulse-decl      ::= "pulse" identifier
 

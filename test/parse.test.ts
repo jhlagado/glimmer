@@ -138,7 +138,7 @@ describe('parseGlimmer', () => {
       'State Words: only byte arrays are supported',
     );
     expect(parseGlimmer('program P\nstate Board : byte[8] = 1').diagnostics[0]?.message).toContain(
-      'State Board: array initializers are not supported',
+      'State Board: array state takes no initializer',
     );
   });
 
@@ -481,5 +481,76 @@ describe('parseGlimmer', () => {
     expect(messages).toContain('Reserved name "Snd_Beep"');
     expect(messages).toContain('Reserved name "Curve_Move"');
     expect(messages).toContain('Reserved name "Shape_Dot"');
+  });
+
+  it('parses layout types, aliases, and typed state', () => {
+    const source = [
+      'program P',
+      'type Point',
+      '    x : byte',
+      '    y : byte',
+      'end',
+      'type Piece',
+      '    origin : Point',
+      '    rows : 4',
+      '    color : byte',
+      'end',
+      'type Pieces = Piece[7]',
+      'state Cursor : Point changed',
+      'state Bag : Piece[7]',
+      'pulse Go',
+      'bind key KEY_1 rising -> Go',
+      'effect E',
+      '    on Go',
+      '    updates Cursor',
+      'begin',
+      '    nop',
+      'end',
+    ].join('\n');
+    const { program, diagnostics } = parseGlimmer(source);
+    expect(diagnostics).toEqual([]);
+    expect(program?.types.map((t) => t.name)).toEqual(['Point', 'Piece', 'Pieces']);
+    expect(program?.types[1]?.fields).toMatchObject([
+      { name: 'origin', type: 'Point' },
+      { name: 'rows', type: '4' },
+      { name: 'color', type: 'byte' },
+    ]);
+    expect(program?.types[2]?.alias).toBe('Piece[7]');
+    expect(program?.states[0]).toMatchObject({
+      name: 'Cursor',
+      typeName: 'Point',
+      changedOnStart: true,
+    });
+    expect(program?.states[1]).toMatchObject({ name: 'Bag', typeName: 'Piece', length: 7 });
+  });
+
+  it('rejects bad type declarations and typed-state misuse', () => {
+    const source = [
+      'program P',
+      'type Empty',
+      'end',
+      'type NoEnd',
+      '    x : byte',
+      'type Loop',
+      '    self : Loop',
+      'end',
+      'type Dup',
+      '    a : byte',
+      '    a : word',
+      'end',
+      'state S : Missing',
+      'state T : Point = 3',
+      'type Point',
+      '    x : byte',
+      'end',
+    ].join('\n');
+    const { diagnostics } = parseGlimmer(source);
+    const messages = diagnostics.map((d) => d.message).join('\n');
+    expect(messages).toContain('Type Empty has no fields');
+    expect(messages).toContain('missing end');
+    expect(messages).toContain('recursive');
+    expect(messages).toContain('duplicate field "a"');
+    expect(messages).toContain('unknown type "Missing"');
+    expect(messages).toContain('typed state takes no initializer');
   });
 });

@@ -457,6 +457,67 @@ describe('CLI pipeline (generate + AZM contract injection)', () => {
   });
 });
 
+describe('structured data (layout types)', () => {
+  const typedProgram = [
+    'program Typed',
+    'type Point',
+    '    x : byte',
+    '    y : byte',
+    'end',
+    'type Piece',
+    '    origin : Point',
+    '    rows : 4',
+    '    color : byte',
+    'end',
+    'type Bag = Piece[7]',
+    'state Cursor : Point changed',
+    'state Pieces : Piece[7]',
+    'state Score : byte',
+    'pulse Go',
+    'bind key KEY_1 rising -> Go',
+    'effect MovePoint',
+    '    on Go',
+    '    updates Cursor',
+    'begin',
+    '    ld hl,Cursor + offset(Point, y)',
+    '    inc (hl)',
+    '    ld a,sizeof(Piece)',
+    '    ld (Score),a',
+    'end',
+    'render Show',
+    '    on Cursor',
+    'begin',
+    '    ld a,(Cursor)',
+    'end',
+  ].join('\n');
+
+  it('emits .type records, .typealias, and typed .ds storage', () => {
+    const { source, diagnostics } = compileToAzm(typedProgram);
+    expect(diagnostics).toEqual([]);
+    expect(source).toContain('Point .type');
+    expect(source).toContain('    x             .byte');
+    expect(source).toContain('    origin        .field Point');
+    expect(source).toContain('    rows          .field 4');
+    expect(source).toContain('.endtype');
+    expect(source).toContain('Bag               .typealias Piece[7]');
+    expect(source).toContain('Cursor:           .ds Point, 0   ; typed state');
+    expect(source).toContain('Pieces:           .ds Piece[7], 0   ; typed state');
+    // Typed cells carry ordinary change flags.
+    expect(source).toContain('CHG_CURSOR');
+  });
+
+  it('assembles with AZM: sizeof/offset resolve against the emitted layouts', async () => {
+    const { source, diagnostics } = compileToAzm(typedProgram);
+    expect(diagnostics).toEqual([]);
+
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-typed-'));
+    const entry = path.join(dir, 'typed.asm');
+    writeFileSync(entry, source!);
+    const assembled = await compile(entry, { emitBin: true, emitHex: false, emitD8m: false });
+    expect(assembled.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+  });
+});
+
 describe('AZM round trip', () => {
   it('generated CounterToy source assembles cleanly with AZM', async () => {
     const result = compileToAzm(counterToy);

@@ -53,8 +53,13 @@ convention — unless `-o` overrides it.
 `src/model.ts` defines the model the parser produces and the generator
 consumes:
 
-- `StateDecl` — named byte/word scalar state, or byte array state with
-  `length`; scalars carry an initial value, all state can set
+- `TypeDecl` — a layout type compiled to an AZM Book 0 `.type` record
+  (or `.typealias` for the alias form); fields are byte/word/addr, byte
+  counts, or type expressions, validated (unknown references, recursion)
+  at parse time
+- `StateDecl` — named byte/word scalar state, byte array state with
+  `length`, or typed state with `typeName` (typed `.ds` storage, no
+  initializer); scalars carry an initial value, all state can set
   `changedOnStart`
 - `PulseDecl` — one-frame transient cell, cleared by frame cleanup
 - `TimerDecl` — oscillator or one-shot countdown that fires a pulse

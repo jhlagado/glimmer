@@ -24,6 +24,8 @@ export type {
   SoundDecl,
   StateDecl,
   TimerDecl,
+  TypeDecl,
+  TypeFieldDecl,
 } from './model.js';
 export { EFFECT_PHASES, PHASES } from './model.js';
 export {

@@ -151,6 +151,44 @@ initial draw.
 in both `on` and `updates`. Glimmer does not add indexing syntax:
 blocks index arrays with ordinary Z80.
 
+#### Layout types
+
+```text
+type Point
+    x : byte
+    y : byte
+end
+
+type Piece
+    origin : Point
+    rows : 4
+    color : byte
+end
+
+type Bag = Piece[7]
+
+state Cursor : Point changed
+state Pieces : Piece[7]
+```
+
+A `type` declaration names a memory layout. Glimmer names it; AZM owns
+the type system — the declaration compiles to an AZM Book 0 `.type`
+record (or `.typealias` for the `type Name = Expr` alias form), so
+`sizeof`, `offset`, and layout casts work on these names in block
+bodies as ordinary AZM:
+
+```asm
+    ld hl,Cursor + offset(Point, y)
+    ld a,sizeof(Piece)
+```
+
+Field types are `byte`, `word`, `addr`, a byte count (`rows : 4`), or
+another type (`origin : Point`, `cells : Point[4]`). State declared
+with a type name — scalar or array — reserves zero-filled typed storage
+(`.ds Point, 0`, `.ds Piece[7], 0`), takes no initializer, and carries
+one change flag for the whole cell, exactly like byte arrays. Recursive
+layouts are rejected at parse time.
+
 ### 3.3 Pulses
 
 ```text

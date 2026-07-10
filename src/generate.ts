@@ -65,6 +65,14 @@ function chgConst(cellName: string): string {
   return `CHG_${cellName.toUpperCase()}`;
 }
 
+/** Map a .glim field type to its AZM layout-field directive. */
+function fieldDirective(fieldType: string): string {
+  if (fieldType === 'byte') return '.byte';
+  if (fieldType === 'word') return '.word';
+  if (fieldType === 'addr') return '.addr';
+  return `.field ${fieldType}`;
+}
+
 export function generateAzm(
   program: GlimmerProgram,
   options: GenerateOptions = {},
@@ -264,8 +272,32 @@ export function generateAzm(
   }
   emit();
 
+  if (program.types.length > 0) {
+    emit('; --- layout types ---');
+    emit('; AZM owns the type system: sizeof, offset, and layout casts');
+    emit('; work on these names in block bodies.');
+    for (const type of program.types) {
+      if (type.alias !== undefined) {
+        emit(`${type.name.padEnd(17)} .typealias ${type.alias}`);
+        continue;
+      }
+      emit(`${type.name} .type`);
+      for (const field of type.fields) {
+        emit(`    ${field.name.padEnd(13)} ${fieldDirective(field.type)}`);
+      }
+      emit('.endtype');
+    }
+    emit();
+  }
+
   emit('; --- state storage ---');
   for (const state of program.states) {
+    if (state.typeName !== undefined) {
+      const typeExpr =
+        state.length !== undefined ? `${state.typeName}[${state.length}]` : state.typeName;
+      emit(`${`${state.name}:`.padEnd(17)} .ds ${typeExpr}, 0   ; typed state`);
+      continue;
+    }
     if (state.length !== undefined) {
       emit(`${`${state.name}:`.padEnd(17)} .ds ${state.length}, 0   ; byte array`);
       continue;
