@@ -298,17 +298,19 @@ sequential.
   `@Name:` boundaries with AZM-inferred contracts; bodies verbatim and
   debug-mapped to `.glim` source like block bodies.
 
-## The 0.3 release line (planned 2026-07-10)
+## The 0.3 release line (planned 2026-07-10, restructured same day)
 
-0.3 is the developer-experience line, shaped to run alongside the
-Debug80 integration phase without changing the language surface:
-AZM diagnostics re-attributed to `.glim` lines (the debug-map rewrite
-pointed the other way), `;!` contract seeds passed through from block
-and routine headers, multi-rotation shapes and text resources (the P6
-remainder — tetro-lib's tables become declarations, and the first
-Glimmer-emitted AZM `op` appears), `bind key any`, Tetro to corpus
-parity (flash, preview, messages, key gate), and P7 word semantics
-documented and closed. TMS9918 is deliberately 0.4. Work plan:
+0.3 is the second-display line: derisk the profile architecture while
+it is still cheap to change. Phase A extracts the profile seam from
+the generator (byte-identical outputs as the refactor gate), Phase B
+builds the tms9918 profile (vblank-paced loop with a real commit
+phase, VRAM shadows with dirty tracking, VDP library), Phase C
+graduates `sprite-chase.glim` from sketch to acceptance test, and
+diagnostics re-attributed to `.glim` lines ride along. This answers
+the open questions below about loop parameterization and the
+glue/library boundary. The developer-experience items originally
+drafted for 0.3 (contract seeds, P6 resource remainder, Tetro corpus
+parity, P7 closure) move to the 0.4 horizon. Work plan:
 [plans/release-0.3.md](plans/release-0.3.md).
 
 ## After the 0.3 release

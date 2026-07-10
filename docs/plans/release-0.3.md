@@ -1,125 +1,122 @@
-# Release 0.3 Work Plan — The Developer-Experience Line
+# Release 0.3 Work Plan — The Second Display
 
-Prepared 2026-07-10, planned while 0.2 awaits its playtest and publish
-call. 0.2 made the language complete; 0.3 makes *writing and debugging*
-`.glim` programs first-class. It is deliberately shaped to run alongside
-the Debug80 integration phase: a stable language surface (no new core
-constructs), with every improvement aimed at the person sitting in the
-editor — diagnostics that point at their source, declarations that
-replace their hand-written tables, and Tetro finished to corpus parity
-as the proof.
+Prepared 2026-07-10; restructured the same day (John's call): 0.3
+derisks the profile architecture instead of polishing developer
+experience. The TMS9918 is the headline, because the second display is
+what forces the answer to the roadmap's biggest open question — **how a
+profile parameterizes the generated loop** — and that answer should
+exist before more profiles, more games, and the Debug80 integration
+harden around a single-profile assumption.
 
-The TMS9918 second platform is **explicitly deferred to 0.4** (see
-"The 0.4 horizon" below): profile parameterization is the biggest
-remaining architectural question, and answering it mid-integration
-would churn the surface Debug80 is being built against.
+The developer-experience items originally drafted for 0.3 (contract
+seeds, the P6 resource remainder, Tetro corpus parity, P7 closure) move
+to the 0.4 horizon. One exception rides along: **diagnostics
+re-attributed to `.glim` lines** — small, orthogonal to the
+architecture work, and immediately useful while playtesting.
 
-## The line
+## Why the matrix and the VDP force the design
 
-0.3 is done when: a contract error in a block body is reported at the
-`.glim` line that caused it; Tetro matches the corpus game
-feature-for-feature (flash, preview, messages, key gate) with its
-hand-written library reduced to genuinely irreducible engine code; and
-nothing in the release changed the language in a way that breaks a 0.2
-program.
+The two displays are opposites, which is exactly their value:
 
-## 1. Diagnostics land in `.glim`
+- **matrix8x8** is a display you *are*: the CPU is the display
+  controller, `ScanFrame` burns the frame budget scanning rows, and all
+  game work runs in the blank window. Render blocks write a
+  framebuffer the scanner reads continuously. There is no commit phase.
+- **TMS9918** is a display you *write to*: the VDP renders
+  autonomously; the program paces itself on vblank (status register
+  $BF, or frame-timed delay), and display changes are VRAM writes that
+  should land in the blank window. The spec's original
+  `poll → logic → render → commit` loop fits it directly — render
+  blocks write shadow state, a commit phase flushes it to VRAM.
 
-The debug map rewrite proved the label-anchored mapping; now point it
-the other way. `buildGlimmerProgram` re-attributes AZM diagnostics
-(contract violations, assembly errors) whose location falls inside a
-block or routine body back to the `.glim` file and line, exactly as the
-d8 rewrite does for address segments. Generated-glue diagnostics stay on
-the generated asm — same transparency split as stepping.
+A profile is therefore not a cosmetic equate-set: it owns the loop
+skeleton, the pacing policy, the render target (framebuffer vs
+shadows+commit), the profile library, and the resource compilation
+targets. That is the abstraction 0.3 extracts.
 
-- Reuse `computeBlockMappings`; the reverse lookup is
-  (asm line → glim file/line) over the same ranges.
-- Both AZM passes (check and assemble) get the treatment.
-- The CLI prints them at `.glim` positions; the API returns them that
-  way, so Debug80 surfaces them in the right editor tab for free.
+## Phase A — extract the profile seam (no behaviour change)
 
-## 2. Contract seeds from source
+`src/generate.ts` currently branches on `isTec1g` throughout. Extract a
+`Profile` abstraction that owns:
 
-Blocks and routines accept optional `;!` contract lines in their
-headers (before `begin`), passed through adjacent to the generated `@`
-label. AZM then *verifies the declared interface* instead of only
-inferring one — the roadmap's register-contracts "next step", and the
-difference between documentation and a checked promise. Routine
-declarations are the headline case (a collision helper declares
-`;! in DE; out carry`); effect blocks get it for symmetry.
+- equates and port constants
+- state/service storage the runtime needs (framebuffer vs VRAM shadows)
+- the main-loop skeleton (scan-driven vs vblank-paced) and which phases
+  exist (`commit` becomes real for the first time)
+- input polling (both profiles use MON-3 `_scanKeys`; the seam still
+  belongs to the profile)
+- the profile library (ScanFrame/FbPlot/... vs VDP helpers) and any
+  library-owned per-frame services (sound, HUD)
+- resource compilation hooks (what `shape`/`sound` mean per display)
 
-## 3. Resource depth — the corpus tables become declarations
+Working hypothesis from the corpus (roadmap open question): **one loop
+skeleton with profile-supplied phases and per-profile pacing policies,
+shared primitives in profile libraries.** Phase A proves or amends it.
 
-The P6 remainder, driven by exactly what tetro-lib.asm still hand-writes:
+Acceptance: pure refactor — the generic and tec1g-mon3 profiles
+regenerate **byte-identical** output for every example (test-enforced),
+with the profile boundary explicit in the code.
 
-- **Multi-rotation shapes** (sketch syntax): `shape PieceT color magenta`
-  with `rot0`..`rot3` rows generates the row bitmaps, the
-  pointer/rotation table, the right-bound table, and the colour entry —
-  the bulk of tetro-lib's data section becomes seven declarations.
-  Single-bitmap shapes stay as they are.
-- **Text resources**: `text MsgPaused "PAUSED"` emits the
-  null-terminated `.db` string, and the tec1g profile grows the LCD
-  service slice (MON-3 string-to-LCD calls) plus the first
-  **Glimmer-emitted AZM `op`** (`lcd_row msg, row`) — the P6/P8 ground
-  rule exercised for real: sugar exists only as visible AZM in the
-  generated file.
-- **`bind key any rising -> Pulse`**: the splash/game-over "press any
-  key" pattern from the corpus, currently approximated with GO.
+## Phase B — the tms9918 profile, first slice
 
-## 4. Tetro to corpus parity
+`display tms9918` (Graphics I first; mode selection syntax can wait).
+Target facts (debug80 emulates all of this:
+src/platforms/tec1g/tms9918.ts):
 
-The acceptance test grows back the first-cut simplifications, each
-exercising a 0.3 feature or an existing construct properly:
+- data port $BE, control port $BF; 16 KiB VRAM; NMI optional — first
+  slice polls the status register's vblank flag (reading $BF clears it)
+- canonical VRAM layout from the demos: pattern $0000, name $0800,
+  sprite attributes $1B00, colour $2000, sprite patterns $3800
+- register init from an 8-byte (value, index|$80) table
+- `SetWriteAddress` (low, then high|$40) + streamed `OUT ($BE)` fills
+  and copies
 
-- **Line-clear flash**: `ClearMask` state + `ClearHold` timer — the
-  corpus flash-then-collapse sequence (existing constructs; the 0.2 cut
-  was scope, not capability).
-- **Game-over key gate**: an `enter` block rearms a `once` timer by
-  writing its countdown cell; restart uses conditional navigation off
-  the gate state. Expressible today — document it as the pattern.
-- **Next-piece preview and LCD messages**: text resources + the LCD
-  slice (item 3).
-- Library shrink: piece tables move from tetro-lib.asm to shape
-  declarations; what remains hand-written is the collision/lock/clear
-  engine, which is the honest boundary.
+Generated loop: wait-for-vblank → commit (flush dirty shadows to VRAM
+in the blank window) → poll → phases. Profile library: VdpSetAddr,
+VdpFill, VdpWriteBlock, register-table init.
 
-## 5. Word change-flag semantics (P7) — decide, small
+Render model, first slice: **sprite-attribute shadow + name-table
+shadow with dirty tracking**. Render blocks write the shadows (ordinary
+memory — verbatim Z80, testable, no VDP timing concerns in user code);
+the commit phase flushes what changed. The name table is 32x24 — the
+dirty-region idea from the roadmap can start coarse (dirty row-ranges
+or a whole-table flag) and refine later.
 
-Word cells already store, flag, and compare correctly (Tetro's Score
-proves it). The deferred question is only whether any *runtime widget*
-needs word awareness (word timers exist; word ramps do not). 0.3
-resolution: document what word cells do and don't do in the spec, keep
-widgets byte-first, and close P7 as "defined, deliberately narrow"
-unless Tetro-parity work surfaces a real need.
+Resources: `shape` on tms9918 compiles to sprite patterns; tile
+patterns/colour tables can start as hand-written imported modules
+(snake-lib precedent) rather than blocking the slice on new resource
+syntax.
 
-## 6. Coordination tracks (not in this package)
+## Phase C — sprite-chase.glim, the acceptance test
 
-Listed so the release plan shows the whole board:
+The sketch made interactive: a player-steered sprite chasing a target
+over a tile background — the VDP demos plus the missing dynamics. It
+must assemble strict-clean (mon3 profile still governs the RST calls)
+and play under Debug80's TMS9918 emulation. Like snake and tetro before
+it, its findings feed fixes before the release.
 
-- **Debug80** (John's integration phase): AZM bump to ^0.2.17,
-  GlimmerBackend over `buildGlimmerProgram`, `.glim` language
-  contribution (grammar with embedded z80-asm, `breakpoints` list),
-  native `.glim` targets. Glimmer 0.3's item 1 makes the error
-  experience match the stepping experience when that lands.
-- **AZM**: the post-injection map/line-offset fix (so a single
-  `--contracts` run emits a map that matches the annotated file), and
-  eventually the `.loc` source-origin directive (Option B) which would
-  let AZM emit glim-attributed maps natively — adopt in Glimmer when it
-  ships, keeping the rewrite as fallback.
+## Phase D — riders
 
-## Explicitly out (the 0.4 horizon)
+- **Diagnostics land in `.glim`**: `buildGlimmerProgram` re-attributes
+  AZM diagnostics inside block/routine bodies to their `.glim`
+  file/line via the existing `computeBlockMappings` ranges; glue
+  diagnostics stay on the generated asm. CLI and API both.
+- Docs: profile chapter in the spec (the two loop models side by side),
+  manual section for the tms9918 profile, engineering-manual update for
+  the Profile seam, roadmap open-questions section rewritten with the
+  answers Phase A/B produced.
 
-- **TMS9918 profile** + `sprite-chase.glim` — the second display
-  answers the profile-parameterization open question and is the
-  natural headline for 0.4, after Debug80 integration stabilizes.
-- `.glim` libraries (namespace story), generated-output module
-  splitting, per-block assemble/check — editor-era and architecture
-  items that should follow, not precede, the integration experience.
+## Explicitly out (now the 0.4 horizon)
+
+Contract seeds from source; multi-rotation shapes, text resources and
+the LCD slice, `bind key any`; Tetro corpus parity (flash, preview,
+messages, key gate); P7 word-semantics closure; `.glim` libraries,
+module splitting, per-block checks.
 
 ## Order
 
-Diagnostics-to-glim → contract seeds → multi-rotation shapes → tetro
-library shrink + flash + gate → text resources + LCD slice + any-key →
-tetro preview/messages → P7 documentation → polish. Items 1–2 first:
-they pay off immediately during John's Tetro playtesting and Debug80
-work, before the resource items land.
+Phase A (seam extraction, byte-identical gate) → Phase B (profile +
+library + commit loop) → Phase C (sprite-chase) → Phase D (diagnostics
+rider + docs). A first: the refactor gate keeps the risk contained —
+if the seam is wrong, we find out while outputs must not change, not
+while a new platform is half-built on top of it.
