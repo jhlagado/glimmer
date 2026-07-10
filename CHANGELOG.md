@@ -1,8 +1,9 @@
 # Changelog
 
-Versions are tagged in git; nothing is published to npm yet.
+Versions are tagged in git and published to npm as `@jhlagado/glimmer`
+(0.4.0 is the first broadly usable published version).
 
-## 0.4.0 - 2026-07-11
+## 0.4.0 - 2026-07-11 (published to npm)
 
 The resources-and-parity line: the sketches' data declarations are
 real on both profiles, the first Glimmer-emitted AZM ops appear, and
