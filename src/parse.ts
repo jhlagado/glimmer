@@ -1261,13 +1261,23 @@ function validateReferences(
       error(owner, `Duplicate name "${name}": all declared names share one namespace.`);
     }
     declaredNames.add(name);
+    if (name.startsWith('_')) {
+      // AZM 0.3: a leading `_` is local-label syntax (and `__` is
+      // reserved for AZM implementation symbols); declared .glim names
+      // become file-level AZM symbols and cannot use it.
+      error(
+        owner,
+        `Reserved name "${name}": a leading "_" is AZM local-label syntax, so ${kind}s cannot start with "_".`,
+      );
+      return;
+    }
     if (
-      /^(Glim|Snd_|Curve_|Shape_|ShapeRot_|ShapeId_|CHG_|__|KEY_|API_|VC_|VDP_|VRAM_)/.test(name) ||
+      /^(Glim|Snd_|Curve_|Shape_|ShapeRot_|ShapeId_|CHG_|KEY_|API_|VC_|VDP_|VRAM_)/.test(name) ||
       RESERVED_NAMES.has(name)
     ) {
       error(
         owner,
-        `Reserved name "${name}": it belongs to the generated runtime (${kind}s cannot use Glim*/Snd_*/Curve_*/Shape_*/CHG_*/__* or runtime symbols).`,
+        `Reserved name "${name}": it belongs to the generated runtime (${kind}s cannot use Glim*/Snd_*/Curve_*/Shape_*/CHG_* or runtime symbols).`,
       );
     }
   };

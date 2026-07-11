@@ -23,18 +23,18 @@ whole chain in process — no child processes, no printing; artifacts are
 written to disk and everything else comes back as values, mirroring how
 Debug80 consumes AZM's `@jhlagado/azm/compile` API. Its `stage` option
 selects depth: `'generate'` writes the AZM source only; `'check'` also
-drives AZM's compile API with `fixRegisterContracts` (contract inference
-at `--rc error` strength, mon3 profile for MON-3 programs) and writes the
-returned annotated source back over the file; `'build'` (default) then
-assembles the annotated file in a second AZM pass into `.hex`, `.bin`,
-and `.d8.json` (the second pass matters — injection edits the file, so a
-map from the first pass would be offset by the injected `;!` lines) and
-rewrites the map. Diagnostics come back AZM-shaped (`severity`, absolute
+runs AZM's register-contract checking without assembling (the generated
+file declares `.contracts` policy; the mon3 register profile is applied
+for MON-3 programs, and inferred output candidates are accepted for user
+routines); `'build'` (default) instead assembles in a single AZM pass
+into `.hex`, `.bin`, and `.d8.json` — contract checking rides along, and
+since AZM 0.3 never rewrites the file, the map's line numbers agree with
+the source exactly as generated — and rewrites the map. Diagnostics come back AZM-shaped (`severity`, absolute
 `sourceName`, `line`/`column`, `code`), Glimmer parse errors included, so
 a host reports both through one path.
 
 For the map rewrite, `computeBlockMappings` anchors each block at its
-`@Glim_<Name>:` label in the final asm text and verifies the body is
+`Glim_<Name>:` label in the generated asm text and verifies the body is
 byte-for-byte verbatim; `rewriteD8Map` moves the matching segments onto
 the `.glim` file (entry or part, from `EffectDecl.file` and `bodyLine`)
 so Debug80 steps block bodies in Glimmer source while generated glue
@@ -111,8 +111,9 @@ diagnostics.
 `generateAzm` emits one AZM file in a fixed order: header, `.org`,
 profile/API equates, key constants, change-flag constants, per-block
 trigger masks, state/timer/ramp storage, the runtime loop,
-`__PollBindings`, optional `__TickTimers`, per-phase dispatch routines,
-optional `__MergeRaised`, wrapped user blocks, `__EndFrame`, generated
+`GlimPollBindings`, optional `GlimTickTimers`, per-phase dispatch
+routines, optional `GlimMergeRaised`, wrapped user blocks,
+`GlimEndFrame`, generated
 curve tables, generated shape tables, generated sound cue wrappers, and
 any profile library.
 
@@ -120,7 +121,7 @@ Everything platform/display-specific sits behind the Profile seam
 (`src/profiles/`): a profile supplies the equates, input and
 display-service storage, file-level data tables, the loop skeleton
 (init; frame start = pacing policy + optional commit + the poll call;
-frame end), the `__PollBindings` implementation, and the resource
+frame end), the `GlimPollBindings` implementation, and the resource
 wrappers + library tail. Three instances exist — `generic`,
 `tec1g-mon3/matrix8x8` (scan-driven: the CPU is the display), and
 `tec1g-mon3/tms9918` (vblank-paced with a commit phase flushing
@@ -137,26 +138,28 @@ Notable constraints the generator honours:
   `FrameCount` when used are assigned into up to four 8-bit banks, at most
   32 flag-carrying cells; exceeding it is a diagnostic, not a truncation.
 - **Block-local labels.** Bodies are emitted byte-for-byte verbatim.
-  AZM (>= 0.2.17) scopes plain labels to the enclosing `@` routine, so
-  every block can define its own `_done` with no rewriting — the `_`
-  prefix is a style convention, not semantics. Verbatim bodies are part
-  of the label-anchored source-mapping contract. `$` is never used in
-  generated names: it is AZM's current-address operator and hex prefix,
-  not label syntax.
+  AZM (>= 0.3) scopes `_name` labels to the nearest preceding non-local
+  label, so every block can define its own `_done` with no rewriting —
+  the `_` prefix is AZM's local-label syntax, and a plain label in a
+  body is file-level (and truncates the block's `.routine` boundary).
+  Verbatim bodies are part of the label-anchored source-mapping
+  contract. `$` is never used in generated names: it is AZM's
+  current-address operator and hex prefix, not label syntax; `__` names
+  are AZM-reserved and never generated.
 - **Fall-through bodies.** Block bodies must not `ret`; the generated
   wrapper appends `updates` change-marking and the final `ret`.
-- **Register contracts are AZM's job.** Every generated routine is a
-  bare `@` boundary; only the profile library carries curated `;!`
-  interface seeds. After writing the file, the CLI drives the packaged
-  `azm` with Debug80's parameters (`--contracts --rc error`, plus
-  `--reg-profile mon3` for MON-3 programs): AZM infers each routine's
-  real contract and injects it into the file. `--no-check` skips the
-  step. Inferred contracts are far tighter than any safe guess (a
-  movement block is `clobbers A,F`, not "clobbers everything").
-  Annotation only inserts/updates `;!` lines adjacent to `@` labels, so
-  the label-anchored mapping contract (label -> body line offsets)
-  holds. Generated output passes `--rc strict --reg-profile mon3`;
-  round-trip tests enforce this.
+- **Register contracts are declared in-source.** The generated file
+  opens with `.contracts strict` (TEC-1G profiles; the generic
+  placeholder profile audits instead, since its API equates have no
+  bodies to analyse) and every callable gets a `.routine` boundary:
+  explicit clauses for the curated profile library, bare `.routine`
+  (AZM infers from the body) for user blocks and routines. User-routine
+  output candidates are accepted via the compile API's
+  `acceptRegisterOutputCandidates` — a routine's outputs are whatever
+  its body produces. AZM 0.3 never rewrites the file, so the
+  label-anchored mapping contract (label -> body line offsets) holds
+  trivially. Generated output passes strict checking under
+  `--reg-profile mon3`; round-trip tests enforce this.
 
 ## The runtime
 
@@ -164,12 +167,12 @@ Notable constraints the generator honours:
   allocated by category order (states, pulses, ramps, FrameCount) into up
   to four banks. Block updates
   raise into the target cell's `RaisedN` when every consumer is in a later
-  phase (merged into `ChangedN` at phase boundaries by `__MergeRaised`) or
+  phase (merged into `ChangedN` at phase boundaries by `GlimMergeRaised`) or
   into `NextN` when any consumer's phase already ran (rolled into
-  `ChangedN` by `__EndFrame`). The now/next split is computed per block
+  `ChangedN` by `GlimEndFrame`). The now/next split is computed per block
   at compile time from the `on`/`updates` graph — exactly-once delivery,
   declaration order never semantic.
-- **Timing widgets** tick in `__TickTimers` before any phase, raising
+- **Timing widgets** tick in `GlimTickTimers` before any phase, raising
   directly into the target cell's `ChangedN`: oscillator timers (writable period cell +
   hidden `Glim_<name>_cnt` countdown), `once` timers (the cell is the
   countdown), ramps (step, flag the cell, fire at terminal), and

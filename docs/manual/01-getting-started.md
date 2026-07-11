@@ -20,9 +20,10 @@ node dist/src/cli.js examples/counter.glim
 ```
 
 This compiles the CounterToy example to `examples/counter.main.asm` — a
-single, readable AZM source file. By default, the CLI also runs AZM in register
-contract mode and injects AZM's inferred `;!` contracts into that file.
-Skip that with `--no-check` when you only want generation.
+single, readable AZM source file. By default, the CLI also runs AZM's
+register-contract checking over it (the generated file declares its
+contract policy and a `.routine` boundary per callable). Skip that with
+`--no-check` when you only want generation.
 
 When you want the whole toolchain in one step — HEX, binary, and a
 Debug80 map — use `build`:
@@ -31,8 +32,8 @@ Debug80 map — use `build`:
 node dist/src/cli.js build examples/counter.glim
 ```
 
-This generates the AZM, injects contracts, assembles with AZM, and then
-rewrites the `.d8.json` Debug80 map so lines inside your `begin`/`end`
+This generates the AZM, assembles it with AZM (contract checking rides
+along), and then rewrites the `.d8.json` Debug80 map so lines inside your `begin`/`end`
 block bodies are attributed to the `.glim` file itself: a breakpoint set
 in Glimmer source resolves, and stepping through your own code stays in
 the `.glim` file. Generated glue (dispatch, timers, the profile library)
@@ -46,13 +47,13 @@ an ordinary AZM program:
 npx azm examples/counter.main.asm
 ```
 
-The `;!` comments above each routine are register contracts — each
-routine's true register effects, inferred and injected by AZM as part
-of the Glimmer build (the same checking Debug80 applies). Contract
-errors in your blocks fail the build with the offending call site
-named. Full `--rc strict` checking uses AZM's monitor profile, because
-the TEC-1G examples call MON-3 through `RST $10`:
-`azm --rc strict --reg-profile mon3 <file>`.
+The `.routine` directives above each routine are register contracts —
+library routines declare their register effects explicitly, and bare
+`.routine` boundaries have AZM infer them from the body. The generated
+file opens with `.contracts strict`, so contract errors in your blocks
+fail the build with the offending call site named. Checking uses AZM's
+monitor profile, because the TEC-1G examples call MON-3 through
+`RST $10`: `azm --reg-profile mon3 <file>`.
 
 ## Your first program
 

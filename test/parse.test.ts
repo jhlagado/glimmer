@@ -465,6 +465,7 @@ describe('parseGlimmer', () => {
       'state Raised2 : byte',
       'state Next3 : byte',
       'pulse GlimTick',
+      'pulse _Fire',
       'sound Snd_Beep len 24 div 3',
       'curve Curve_Move linear steps 8',
       'shape Shape_Dot color green',
@@ -478,6 +479,9 @@ describe('parseGlimmer', () => {
     expect(messages).toContain('Reserved name "Raised2"');
     expect(messages).toContain('Reserved name "Next3"');
     expect(messages).toContain('Reserved name "GlimTick"');
+    // AZM 0.3: leading _ is local-label syntax; declared names project
+    // to file-level AZM symbols and cannot use it.
+    expect(messages).toContain('Reserved name "_Fire"');
     expect(messages).toContain('Reserved name "Snd_Beep"');
     expect(messages).toContain('Reserved name "Curve_Move"');
     expect(messages).toContain('Reserved name "Shape_Dot"');

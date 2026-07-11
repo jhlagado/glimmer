@@ -280,16 +280,19 @@ _done:
 ```
 
 The body passes into the generated file byte-for-byte verbatim. Locality
-is AZM's doing, not a rewrite: every block compiles under an `@Glim_<Name>:`
-entry label, and AZM (0.2.17+) scopes plain labels to their enclosing `@`
-routine, so every block can have its own `_done`. The underscore is a
-Glimmer style convention that signals intent; any plain label spelling
-gets the same routine-local scope.
+is AZM's doing, not a rewrite: every block compiles under a
+`Glim_<Name>:` entry label, and AZM (0.3+) scopes `_name` labels to the
+nearest preceding non-local label, so every block can have its own
+`_done`. The leading underscore is AZM's local-label syntax, not just a
+style convention: a plain label in a body is a file-level symbol (and
+truncates the block's routine boundary), so block-internal branch
+targets must use `_name`.
 
 (`$` stays out of generated names: in AZM it is the current-address
 operator and the hexadecimal prefix. Label privacy at file granularity is
-AZM's `.import` mechanism: `@Name:` labels are public exports, plain
-labels above a file's first `@` label are private to their source unit.)
+AZM's `.import` mechanism: plain declarations in an imported unit are
+private to it, and `@Name:` exports Name — the `@` is declaration
+syntax only, never part of the lookup name.)
 
 Style: one instruction per line. AZM's backslash stacking
 (`ld a,(hl) \ inc hl`) remains available for dense passages, and single
@@ -432,23 +435,23 @@ symbols.
 Every generated program is one loop. The generic profile's shape:
 
 ```asm
-@Start:
+Start:
     call API_InitDisplay
 MainLoop:
-    call __PollBindings
-    call __TickTimers
-    call __RunDeriveEffects
-    call __RunLogicEffects
-    call __MergeRaised
-    call __RunRenderEffects
+    call GlimPollBindings
+    call GlimTickTimers
+    call GlimRunDeriveEffects
+    call GlimRunLogicEffects
+    call GlimMergeRaised
+    call GlimRunRenderEffects
     call API_FlushDisplay
-    call __EndFrame
+    call GlimEndFrame
     jp MainLoop
 ```
 
 A helper is generated only when the program needs it. A program with no
-timers, ramps, or `FrameCount` gets no `__TickTimers`; a program with no
-compute blocks gets no derive dispatcher; `__MergeRaised` appears only
+timers, ramps, or `FrameCount` gets no `GlimTickTimers`; a program with no
+compute blocks gets no derive dispatcher; `GlimMergeRaised` appears only
 when same-frame propagation across later phases is possible. The frame
 reads top to bottom: poll, tick runtime widgets, run what changed, show it,
 roll frame state forward, repeat.
@@ -459,13 +462,13 @@ CPU is also the display controller, so the loop leads with the scanout:
 ```asm
 MainLoop:
     call ScanFrame            ; show one full frame, then blank
-    call __PollBindings       ; game work runs in the blank window
-    call __TickTimers
-    call __RunDeriveEffects
-    call __RunLogicEffects
-    call __MergeRaised
-    call __RunRenderEffects
-    call __EndFrame
+    call GlimPollBindings     ; game work runs in the blank window
+    call GlimTickTimers
+    call GlimRunDeriveEffects
+    call GlimRunLogicEffects
+    call GlimMergeRaised
+    call GlimRunRenderEffects
+    call GlimEndFrame
     jp MainLoop
 ```
 
@@ -496,9 +499,9 @@ dispatcher tests only the banks the effect depends on:
 ```asm
     ld a,(Changed0)
     and GlimDep_DrawCount__B0
-    jr z,GlimSkip_DrawCount
+    jr z,_skip_DrawCount
     call Glim_DrawCount
-GlimSkip_DrawCount:
+_skip_DrawCount:
 ```
 
 ### 5.3 Update Propagation
@@ -506,7 +509,7 @@ GlimSkip_DrawCount:
 `updates` compiles to change propagation in the block's wrapper:
 
 ```asm
-@Glim_ApplyIncrement:
+Glim_ApplyIncrement:
     ; the block, byte-for-byte verbatim
     ld hl,Count
     inc (hl)
@@ -521,15 +524,15 @@ GlimSkip_DrawCount:
 
 The v0.2 rule is exactly-once delivery. If every consumer of an updated
 cell is in a later phase, the wrapper raises into that cell's `RaisedN`
-bank and `__MergeRaised` makes it visible this frame. If any consumer
+bank and `GlimMergeRaised` makes it visible this frame. If any consumer
 already ran or is in the same phase, the wrapper raises into that cell's
-`NextN` bank; `__EndFrame` then makes it visible next frame. Declaration
+`NextN` bank; `GlimEndFrame` then makes it visible next frame. Declaration
 order inside a phase is never semantic. Comparing old and new values
 remains a future optimization.
 
 ### 5.4 Frame Cleanup
 
-The generated `__EndFrame` clears pulse storage, drops consumed
+The generated `GlimEndFrame` clears pulse storage, drops consumed
 same-frame raises, rolls each `NextN` into its matching `ChangedN`, and
 clears `NextN`.
 A pulse lives for exactly one frame; a change triggers its dependents
@@ -560,7 +563,7 @@ Two displays matter to Glimmer:
   Render blocks never touch VDP timing: they write ordinary memory —
   the name-table shadow (32x24, per-row dirty tracking) and the
   sprite-attribute shadow — through `NamePut`, `SpriteSet`, and
-  `SpriteInit`, and `__Commit` streams what changed. The profile
+  `SpriteInit`, and `GlimCommit` streams what changed. The profile
   library carries the VDP access primitives (`VdpSetAddrWrite`,
   `VdpWriteBlock`, `VdpFill`, `VdpWaitVBlank`) for one-time uploads of
   patterns and colours (call them from an enter block, tables in an
@@ -707,11 +710,11 @@ DecPressed:       .db 0
 Changed0:         .db %00000001
 ```
 
-The wrapped block, body verbatim (AZM scopes `_done` to the `@` routine)
+The wrapped block, body verbatim (AZM scopes `_done` to the entry label)
 with the `updates` propagation appended:
 
 ```asm
-@Glim_ApplyIncrement:
+Glim_ApplyIncrement:
     ld hl,Count
     inc (hl)
     ld a,(hl)
@@ -731,7 +734,7 @@ _done:
 And the frame rollover:
 
 ```asm
-__EndFrame:
+GlimEndFrame:
     xor a
     ld (IncPressed),a
     ld (DecPressed),a

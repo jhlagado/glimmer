@@ -114,9 +114,9 @@ end
 ```
 
 Block bodies land in the generated file byte-for-byte verbatim; AZM
-scopes plain labels to their enclosing `@` routine, so every block can
-have its own `_done` (the underscore is a style convention, not
-semantics). Blocks run when any of their `on` cells changed; `updates`
+scopes `_name` labels to the block's entry label, so every block can
+have its own `_done` (the leading underscore is AZM's local-label
+syntax — block-internal branch targets must use it). Blocks run when any of their `on` cells changed; `updates`
 cells are marked changed after the block runs.
 
 ## Development

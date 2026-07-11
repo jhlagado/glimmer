@@ -3,6 +3,42 @@
 Versions are tagged in git and published to npm as `@jhlagado/glimmer`
 (0.4.0 is the first broadly usable published version).
 
+## 0.5.0 - 2026-07-11
+
+The AZM 0.3 migration: Glimmer generates and consumes AZM 0.3.2 syntax
+and metadata, removing Debug80's need for a nested legacy AZM.
+
+- Requires `@jhlagado/azm` ^0.3.2 (was ^0.2.17).
+- Generated register contracts use the `.routine` directive (explicit
+  in/out/clobbers clauses for the curated profile library, bare
+  `.routine` inference for user blocks and routines) under an in-file
+  `.contracts strict` policy on the TEC-1G profiles (`.contracts
+audit` on the generic placeholder profile, whose API equates have no
+  bodies to analyse). The legacy `;!` comments and `; expects` notes
+  are gone, from generated output and from the example libraries.
+- The 0.3 declaration model in generated output: no `@` markers in the
+  root program (plain `Name:` is already non-local; `@` remains what it
+  now is — export syntax for `.import`ed units), internal runtime
+  entries renamed from `__X` to `GlimX` (`__` is AZM-reserved), and
+  every internal branch label is an owner-local `_name` label. Block
+  bodies keep using `_name` for their own labels; a plain label in a
+  body is now file-level and truncates the block's routine boundary.
+- `.glim` declared names may no longer start with `_` (AZM 0.3 reserves
+  the leading underscore for local-label syntax); the parser rejects
+  them with a pointed diagnostic.
+- `glimmer build` is a single AZM pass: contract checking rides the
+  assembly (policy and boundaries are declared in the generated file),
+  nothing rewrites the file, and the debug map's line numbers agree
+  with the source exactly as generated. User-routine output candidates
+  are accepted via the compile API (`acceptRegisterOutputCandidates`).
+- Binary output is byte-identical to 0.4.0 for six of the seven
+  examples; sprite-chase gains two bytes (an explicit `ld b,0` in
+  GlimCommit so no stale register flows into its save/restore loop —
+  found by AZM 0.3's stricter analysis).
+- Imported AZM modules called from generated code must declare
+  `.routine` contracts (strict code cannot prove a call into a
+  contract-less unit); tetro-lib.asm and snake-lib.asm show the form.
+
 ## 0.4.0 - 2026-07-11 (published to npm)
 
 The resources-and-parity line: the sketches' data declarations are

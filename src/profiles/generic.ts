@@ -18,7 +18,8 @@ function emitPollBindings(
   raiseChanged: (cellName: string) => void,
 ): void {
   emit('; --- input polling ---');
-  emit('@__PollBindings:');
+  emit('.routine');
+  emit('GlimPollBindings:');
   if (program.bindings.length === 0) {
     op('ret');
     emit();
@@ -37,11 +38,11 @@ function emitPollBindings(
   emit();
   for (const binding of program.bindings) {
     op(`bit     ${binding.key}_BIT,c`);
-    op(`jr      z,__NoPulse_${binding.target}_${binding.key}`);
+    op(`jr      z,_skip_${binding.target}_${binding.key}`);
     op('ld      a,1');
     op(`ld      (${binding.target}),a`);
     raiseChanged(binding.target);
-    emit(`__NoPulse_${binding.target}_${binding.key}:`);
+    emit(`_skip_${binding.target}_${binding.key}:`);
   }
   op('ret');
   emit();
@@ -75,7 +76,7 @@ export const genericProfile: Profile = {
     op('call    API_InitDisplay');
   },
   emitFrameStart({ op }: ProfileContext): void {
-    op('call    __PollBindings');
+    op('call    GlimPollBindings');
   },
   emitFrameEnd({ op }: ProfileContext): void {
     op('call    API_FlushDisplay');

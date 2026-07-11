@@ -238,10 +238,12 @@ These are the items that still matter before drawing the line:
    inside block bodies are re-attributed to their `.glim` file (entry or
    part) using the label-anchored contract — `@Glim_<Name>:` plus
    byte-for-byte verbatim bodies — while generated glue stays attributed
-   to the generated `.asm`. Assembly runs as a second AZM pass over the
-   annotated file so map lines match the file on disk (a single
-   `--contracts` pass would produce a map offset by the injected `;!`
-   lines — worth fixing in AZM eventually).
+   to the generated `.asm`. Assembly originally ran as a second AZM
+   pass over the annotated file so map lines matched the file on disk
+   (a single `--contracts` pass produced a map offset by the injected
+   `;!` lines). Resolved upstream by AZM 0.3: contracts are declared
+   in-source with `.routine` and nothing rewrites the file, so the
+   build is a single pass (2026-07-11).
 4. **Docs winnow.** The manual and roadmap describe the shipped core.
    TMS9918, Tetro/Pacmo, cards, structured data, libraries, and richer
    resources move to post-publish tracks.
@@ -357,18 +359,19 @@ These are important, but they are not blockers:
   and tile resources, and Tetro/Pacmo-scale game profiles are
   post-publish expansion work.
 
-**Register contracts.** AZM formalizes register interfaces (`;!` in/
-out/clobbers/preserves on `@` routine boundaries) and proves callers
-against them — catching clobbered-loop-counter bugs at assemble time.
-Glimmer now leans on this: every generated routine is a bare `@`
-boundary, and the CLI drives AZM with Debug80's parameters
-(`--contracts --rc error --reg-profile mon3`) so AZM infers and injects
-each routine's true contract into the generated file — Glimmer supplies
-boundaries, AZM supplies truth. Output passes `--rc strict
---reg-profile mon3` (test-enforced). Next steps: map contract
-diagnostics to `.glim` lines via label-anchored mapping; pass `;!`
-contracts on `routine` blocks through from `.glim` source; let profiles
-ship `.asmi` interfaces for monitor APIs. The payoff for Glimmer users:
+**Register contracts.** AZM formalizes register interfaces (since 0.3:
+a `.routine` directive with in/out/maybe-out/clobbers/preserves clauses
+before the entry label, checked under per-file `.contracts` policy) and
+proves callers against them — catching clobbered-loop-counter bugs at
+assemble time. Glimmer leans on this: the generated file declares
+`.contracts strict` (TEC-1G profiles), the curated library carries
+explicit clauses, and user blocks and routines get bare `.routine`
+boundaries whose contracts AZM infers from the body — Glimmer supplies
+boundaries, AZM supplies truth. Inferred output candidates are accepted
+for user routines through the compile API. Output passes strict
+checking under the mon3 register profile (test-enforced). Next steps:
+pass contract clauses on `routine` blocks through from `.glim` source;
+let profiles ship `.asmi` interfaces for monitor APIs. The payoff for Glimmer users:
 blocks call library and monitor routines constantly, and contracts turn
 register collisions — the classic Z80 bug — into build-time errors.
 
@@ -434,11 +437,11 @@ it needs address segments attributed to `counter.glim` lines instead of
 
 - **Option A — Glimmer composes. ✅ Implemented 2026-07-09 as
   `glimmer build`** (`src/build.ts`). Compiles `.glim` → `.asm`, runs AZM
-  (contract injection, then a second pass over the annotated file for
-  `.hex`/`.bin`/`.d8.json`), then rewrites the map: segments inside user
+  (a single AZM pass for `.hex`/`.bin`/`.d8.json`, contract checking
+  riding along since AZM 0.3), then rewrites the map: segments inside user
   blocks are re-attributed to the `.glim` file (entry or part), while
   generated glue stays attributed to the `.asm`. The anchor is Option D's
-  contract — `@Glim_<Name>:` labels plus byte-for-byte verbatim bodies —
+  contract — `Glim_<Name>:` labels plus byte-for-byte verbatim bodies —
   with each body text-verified before mapping, so a drifted block is
   skipped with a warning rather than mapped wrongly. No changes to AZM or
   Debug80's map reader; stepping lands in `.glim` for user code and drops
@@ -456,10 +459,10 @@ it needs address segments attributed to `counter.glim` lines instead of
   least aligned with the existing architecture; not recommended.
 - **Option D — label-anchored mapping (no new artifacts).** The generated
   naming convention is itself debug information. Every effect's code
-  begins at `@Glim_<Effect>:`, the `.d8.json` map records symbols with
+  begins at `Glim_<Effect>:`, the `.d8.json` map records symbols with
   addresses, and block bodies are copied into the generated file
-  byte-for-byte verbatim (since AZM 0.2.17 scopes labels to `@` routines,
-  no renaming happens at all). So a tool holding the `.glim`, the
+  byte-for-byte verbatim (AZM's `_name` labels are local to the block's
+  entry label, so no renaming happens at all). So a tool holding the `.glim`, the
   generated `.asm`, and the `.d8.json` can reconstruct the full mapping
   with zero extra metadata: the symbol gives the block's start, and body
   line k after the label corresponds to body line k after `begin`.
@@ -492,14 +495,14 @@ fallout) and the `glim` language contribution includes the
 
 - _How does a profile parameterize the generated loop?_ One loop
   skeleton with profile-supplied hooks, settled by building both
-  displays on it: the core emits `@Start`/`MainLoop`/phase calls/
-  `__EndFrame`, and the profile supplies init, the frame start (pacing
+  displays on it: the core emits `Start`/`MainLoop`/phase calls/
+  `GlimEndFrame`, and the profile supplies init, the frame start (pacing
   policy + commit + the poll call), and the frame end. The matrix's
   scan-then-work and the VDP's wait-commit-poll both fit without
   special cases; `commit` exists only where the profile emits it.
 - _Where is the glue/library boundary?_ Settled in practice: generated
   glue is everything derived from the program (dispatch, wrappers,
-  flags, `__Commit`'s dirty loop); the profile library is everything a
+  flags, `GlimCommit`'s dirty loop); the profile library is everything a
   program merely calls (`ScanFrame`, `FbPlot`, `VdpWriteBlock`,
   `SpriteSet`). Both are emitted into the one visible file today.
 - _When do profile services move into AZM `.import` libraries?_ Still

@@ -14,22 +14,22 @@ or change purpose.
 
 ## src/
 
-| File                     | Purpose                                                                                                                                                                                    |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `model.ts`               | Program model types: states, pulses, timers, ramps, resources, blocks, diagnostics                                                                                                         |
-| `load.ts`                | Multi-file loading: parts resolved and merged into one program                                                                                                                             |
-| `parse.ts`               | Line-oriented `.glim` parser and reference validation                                                                                                                                      |
-| `generate.ts`            | AZM generator core: change flags, storage, dispatch, wrappers, rollover; profile hooks for everything platform-specific                                                                    |
-| `emit.ts`                | Shared emission helpers (hex, bin8)                                                                                                                                                        |
-| `profiles/types.ts`      | The Profile interface and ProfileContext                                                                                                                                                   |
-| `profiles/index.ts`      | Profile selection by platform/display pair                                                                                                                                                 |
-| `profiles/generic.ts`    | Generic v0 profile: placeholder API, PrevKeys polling                                                                                                                                      |
-| `profiles/tec1g-mon3.ts` | Matrix profile: scan loop, framebuffer, sound/HUD service, shapes                                                                                                                          |
-| `profiles/tms9918.ts`    | VDP profile: vblank pacing, commit phase, shadow tables, VDP library                                                                                                                       |
-| `profiles/mon3-input.ts` | MON-3 keypad input shared by the TEC-1G profiles                                                                                                                                           |
-| `index.ts`               | Public API: re-exports plus `compileToAzm`                                                                                                                                                 |
-| `build.ts`               | Programmatic build API (`@jhlagado/glimmer/build`): generate → in-process AZM contract injection/check → assemble → debug-map rewrite anchored at `@Glim_*` labels; AZM-shaped diagnostics |
-| `cli.ts`                 | Thin shell over the build API: `glimmer <entry.glim>` (stage check), `glimmer build` (full artifacts + map rewrite), `--no-check` (generate only)                                          |
+| File                     | Purpose                                                                                                                                                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model.ts`               | Program model types: states, pulses, timers, ramps, resources, blocks, diagnostics                                                                                                                                   |
+| `load.ts`                | Multi-file loading: parts resolved and merged into one program                                                                                                                                                       |
+| `parse.ts`               | Line-oriented `.glim` parser and reference validation                                                                                                                                                                |
+| `generate.ts`            | AZM generator core: change flags, storage, dispatch, wrappers, rollover; profile hooks for everything platform-specific                                                                                              |
+| `emit.ts`                | Shared emission helpers (hex, bin8)                                                                                                                                                                                  |
+| `profiles/types.ts`      | The Profile interface and ProfileContext                                                                                                                                                                             |
+| `profiles/index.ts`      | Profile selection by platform/display pair                                                                                                                                                                           |
+| `profiles/generic.ts`    | Generic v0 profile: placeholder API, PrevKeys polling                                                                                                                                                                |
+| `profiles/tec1g-mon3.ts` | Matrix profile: scan loop, framebuffer, sound/HUD service, shapes                                                                                                                                                    |
+| `profiles/tms9918.ts`    | VDP profile: vblank pacing, commit phase, shadow tables, VDP library                                                                                                                                                 |
+| `profiles/mon3-input.ts` | MON-3 keypad input shared by the TEC-1G profiles                                                                                                                                                                     |
+| `index.ts`               | Public API: re-exports plus `compileToAzm`                                                                                                                                                                           |
+| `build.ts`               | Programmatic build API (`@jhlagado/glimmer/build`): generate → single in-process AZM pass (assembly with `.contracts` checking riding along) → debug-map rewrite anchored at `Glim_*` labels; AZM-shaped diagnostics |
+| `cli.ts`                 | Thin shell over the build API: `glimmer <entry.glim>` (stage check), `glimmer build` (full artifacts + map rewrite), `--no-check` (generate only)                                                                    |
 
 ## test/
 

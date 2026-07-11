@@ -15,7 +15,6 @@
 ; (ShapeRotPtrTable / ShapeRotRightTbl / ShapeRotColorTbl).
 
 ; Score delta per line-clear count; counts >= 4 clamp to the tetris.
-;! clobbers A,C,DE,HL,F
 ClearScoreTbl:
         .dw     0, 100, 300, 500, 800
 
@@ -38,7 +37,7 @@ ShiftCount:
 ; Recompute the piece pointer, right bound, and colour bits from the
 ; program's CurPieceIndex and CurRotation cells. Call after either
 ; changes.
-;! clobbers A,C,DE,HL,F
+.routine clobbers A,C,DE,HL,F
 @SetCurPiece:
         ld      a,(CurPieceIndex)
         add     a,a
@@ -74,7 +73,7 @@ ShiftCount:
 
 ; Shift a piece-row bitmask A right by ShiftCount positions (MSB-left:
 ; SRL moves the piece toward higher-numbered columns).
-;! in A; out A; clobbers F
+.routine in A out A clobbers F
 @ShiftRowMask:
         ld      c,a
         ld      a,(ShiftCount)
@@ -90,7 +89,7 @@ _done:
 
 ; Test a candidate placement at D=x, E=y against bounds and the board.
 ; Carry set means blocked. BC, DE, HL preserved.
-;! in DE; out carry,zero; clobbers sign,parity,halfCarry
+.routine in DE out carry,zero clobbers sign,parity,halfCarry
 @CheckCollAt:
         push    bc
         push    de
@@ -106,7 +105,6 @@ _done:
         ld      de,(CurPiecePtr)
 _row:
         ld      a,(de)
-        ; expects out A
         call    ShiftRowMask
         ld      c,a
         or      a
@@ -139,7 +137,7 @@ _exit:
         ret
 
 ; OR mask C into row L of the plane at DE.
-;! in C,DE,L; clobbers F
+.routine in C,DE,L clobbers F
 @OrPlaneRow:
         push    hl
         ld      h,0
@@ -151,7 +149,7 @@ _exit:
         ret
 
 ; Blit the active piece into the four board planes at PlayerX/PlayerY.
-;! clobbers A,BC,DE,HL,F
+.routine clobbers A,BC,DE,HL,F
 @LockPiece:
         ld      a,(PlayerX)
         ld      (ShiftCount),a
@@ -198,7 +196,7 @@ _next:
 
 ; Collapse row E: every plane shifts rows 0..E-1 down one; row 0
 ; clears. Preserves DE.
-;! in E; clobbers F
+.routine in E clobbers F
 @CollapseRow:
         push    de
         ld      b,4                  ; four planes
@@ -235,7 +233,7 @@ _top:
 
 ; Bitmask of full rows (bit r = row r is $FF), without collapsing —
 ; the flash phase shows them before FinishClear collapses.
-;! out A; clobbers F
+.routine out A clobbers F
 @FullRowsMask:
         ld      c,0                  ; mask
         ld      b,8
@@ -262,7 +260,7 @@ _step:
 
 ; Clear every full row, collapsing the planes down. Out: A = rows
 ; cleared (0..4).
-;! out A,E,carry; clobbers zero,sign,parity,halfCarry
+.routine out A,E,carry clobbers zero,sign,parity,halfCarry
 @ClearFullRows:
         ld      c,0                  ; cleared count
         ld      e,7                  ; scan from the bottom row up
@@ -293,7 +291,7 @@ _done:
         ret
 
 ; Score delta for A cleared rows (clamped to 4). Out DE = delta.
-;! in A; out DE; clobbers F
+.routine in A out DE clobbers F
 @ScoreForClears:
         cp      5
         jr      c,_ok
@@ -312,7 +310,7 @@ _ok:
 ; Promote the next piece and roll a new preview; position at the
 ; spawn point. Out: carry set when the spawn placement is blocked
 ; (game over).
-;! out carry,zero; clobbers sign,parity,halfCarry
+.routine out carry,zero clobbers sign,parity,halfCarry
 @SpawnPiece:
         ld      a,(NextPieceIndex)
         ld      (CurPieceIndex),a
@@ -337,7 +335,7 @@ _have:
         ret
 
 ; Zero the 8 bytes at HL.
-;! in HL; clobbers F
+.routine in HL clobbers F
 @ZeroPlane:
         ld      b,8
         xor     a
@@ -348,7 +346,7 @@ _loop:
         ret
 
 ; Reset the game state for a new round.
-;! out carry,zero; clobbers sign,parity,halfCarry
+.routine out carry,zero clobbers sign,parity,halfCarry
 @InitGame:
         ld      hl,BoardRows
         call    ZeroPlane
@@ -367,7 +365,7 @@ _loop:
 ; Rebuild the framebuffer from the board planes, then overlay the
 ; active piece in its colour. Row-major: each matrix row is R,G,B,aux
 ; bytes at Framebuffer + row*4, MSB-left like the planes.
-;! out DE,A,C,zero; clobbers carry,sign,parity,halfCarry
+.routine out DE,A,C,zero clobbers carry,sign,parity,halfCarry
 @DrawBoardFb:
         ld      a,(PlayerX)
         ld      (ShiftCount),a
@@ -396,7 +394,6 @@ _row:
         add     hl,de
         ld      a,(hl)
         pop     de
-        ; expects out A
         call    ShiftRowMask
         ld      c,a
 _planes:

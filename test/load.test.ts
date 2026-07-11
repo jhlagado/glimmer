@@ -118,7 +118,7 @@ begin
     call API_DrawChar
 end
 `,
-      'lib/double.asm': `;! in A; out A
+      'lib/double.asm': `.routine in A out A
 @Double:
         add     a,a
         ret
@@ -131,7 +131,7 @@ end
     expect(generated.source).toContain('.import "lib/double.asm"');
     // The import section sits after the frame rollover's ret.
     expect(generated.source.indexOf('.import')).toBeGreaterThan(
-      generated.source.indexOf('@__EndFrame:'),
+      generated.source.indexOf('GlimEndFrame:'),
     );
 
     const entry = path.join(dir, 'app.main.asm');
@@ -169,7 +169,7 @@ describe('tetro (the acceptance test)', () => {
     // Enter edge gate: SetupPlaying (StartRound) must not re-run on the
     // conditional CurrentCard writes from ApplyGravity.
     expect(generated.source).toMatch(
-      /ld {6}a,\(GlimPrevCard\)\n {8}cp {6}Card\.Playing\n {8}jr {6}z,GlimSkip_StartRound/,
+      /ld {6}a,\(GlimPrevCard\)\n {8}cp {6}Card\.Playing\n {8}jr {6}z,_skip_StartRound/,
     );
 
     const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-tetro-'));
@@ -202,9 +202,9 @@ describe('sprite-chase (the tms9918 acceptance test)', () => {
     // The written-to display: vblank pacing, then commit, then poll.
     expect(generated.source).toContain('call    VdpWaitVBlank');
     expect(generated.source).toMatch(
-      /call {4}VdpWaitVBlank.*\n.*call {4}__Commit.*\n.*call {4}__PollBindings/,
+      /call {4}VdpWaitVBlank.*\n.*call {4}GlimCommit.*\n.*call {4}GlimPollBindings/,
     );
-    expect(generated.source).toContain('@__Commit:');
+    expect(generated.source).toContain('GlimCommit:');
     expect(generated.source).toContain('NameShadow:');
     expect(generated.source).toContain('SpriteShadow:');
     // Resources are declarations: slot/index equates, generated upload,
@@ -213,7 +213,7 @@ describe('sprite-chase (the tms9918 acceptance test)', () => {
     expect(generated.source).toContain('Target            .equ 1   ; sprite slot + pattern');
     expect(generated.source).toContain('Pip               .equ 1   ; tile index');
     expect(generated.source).toContain('op sprite_at(slot imm8, xcell imm16, ycell imm16)');
-    expect(generated.source).toContain('@LoadResourcesVram:');
+    expect(generated.source).toContain('LoadResourcesVram:');
     expect(generated.source).toContain('call    LoadResourcesVram');
 
     const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-chase-'));

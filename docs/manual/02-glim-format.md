@@ -232,10 +232,13 @@ the compilation unit is the project, files are storage. Paths resolve
 relative to the entry file, and diagnostics name the file they come
 from.
 
-`import` brings a hand-written AZM module into the program: its `@`
-labels become callable from any block, and its plain labels stay
-private to the module. Glimmer places the `.import` where the module's
-bytes land outside every execution path.
+`import` brings a hand-written AZM module into the program: its
+`@`-exported names become callable from any block (references omit the
+`@`), and its plain declarations stay private to the module. Give each
+callable a `.routine` contract line — the generated program checks
+register contracts strictly, and a call into a routine with no declared
+or inferable contract will not assemble. Glimmer places the `.import`
+where the module's bytes land outside every execution path.
 
 `glimmer --deps entry.glim` prints the program's dependency report:
 for every cell, who raises it and which blocks it triggers — the
@@ -472,12 +475,14 @@ changes are never implied. The body between `begin` and `end` is real
 AZM assembly. AZM can stack instructions on one line, but Glimmer examples
 prefer one instruction per line because it is easier to read and teach.
 
-Labels inside a block are local to it: every block compiles under an
-`@`-prefixed routine entry, and AZM scopes plain labels to their enclosing
-`@` routine, so every block can have its own `_done`. The body lands in the
-generated file byte-for-byte verbatim. The leading underscore is a style
-convention that marks a label as local at a glance — any plain label gets
-the same block-local scope.
+Labels inside a block are local to it when they use AZM's `_name`
+local-label syntax: every block compiles under its own routine entry,
+and `_name` labels attach to it, so every block can have its own
+`_done`. The body lands in the generated file byte-for-byte verbatim.
+The leading underscore is the semantics, not just style — a plain label
+in a body is a file-level symbol shared with the whole program (and
+truncates the block's routine boundary), so block-internal branch
+targets must use `_name`.
 
 Block bodies fall through — do not end them with `ret`. The generated
 wrapper appends the change-flag bookkeeping and the `ret`.

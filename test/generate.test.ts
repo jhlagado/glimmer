@@ -27,9 +27,9 @@ describe('generateAzm', () => {
     expect(source).toContain('Changed0:         .db %00000001');
 
     // Runtime loop calls only the phases that have effects.
-    expect(source).toContain('call    __RunLogicEffects');
-    expect(source).toContain('call    __RunRenderEffects');
-    expect(source).not.toContain('__RunDeriveEffects');
+    expect(source).toContain('call    GlimRunLogicEffects');
+    expect(source).toContain('call    GlimRunRenderEffects');
+    expect(source).not.toContain('GlimRunDeriveEffects');
 
     // Block-local labels pass through verbatim; AZM scopes them to the
     // enclosing @Glim_<Effect> routine.
@@ -86,7 +86,7 @@ describe('generateAzm', () => {
     expect(source).toContain('GlimDep_TouchHigh__B0 .equ CHG_S0');
     expect(source).toContain('GlimDep_TouchHigh__B1 .equ CHG_S8');
     expect(source).toContain('GlimDep_DrawHigh__B1 .equ CHG_S8');
-    expect(source).toContain('jr      nz,GlimRun_TouchHigh');
+    expect(source).toContain('jr      nz,_run_TouchHigh');
     expect(source).toContain('ld      a,(Changed1)');
     expect(source).toContain('and     GlimDep_DrawHigh__B1');
     expect(source).toContain('ld      a,(Changed1)');
@@ -252,12 +252,12 @@ describe('tec1g-mon3 matrix8x8 profile', () => {
 
     // Scan-driven loop: frame first, game work in the blank window.
     expect(source).toContain('call    ScanFrame');
-    expect(source).toContain('@ScanFrame:');
+    expect(source).toContain('ScanFrame:');
     expect(source).toContain('Framebuffer:');
 
     // Profile library present for user code to call.
-    expect(source).toContain('@FbPlot:');
-    expect(source).toContain('@FbClear:');
+    expect(source).toContain('FbPlot:');
+    expect(source).toContain('FbClear:');
   });
 
   it('rejects unknown MON-3 keys', () => {
@@ -273,11 +273,12 @@ describe('tec1g-mon3 matrix8x8 profile', () => {
   it('generated Dot source assembles and passes strict register contracts', async () => {
     const result = compileToAzm(dot);
     expect(result.diagnostics).toEqual([]);
-    expect(result.source).toContain('@Glim_DrawDot:');
-    // Contracts are AZM's job: the generator emits bare @ boundaries and
-    // the header says who injects the ;! comments.
-    expect(result.source).toContain('--contracts --rc error --reg-profile mon3');
-    expect(result.source).not.toContain(';! clobbers A,BC,DE,HL,IX,IY');
+    expect(result.source).toContain('Glim_DrawDot:');
+    // Contracts are declared in-source: strict policy plus a .routine
+    // boundary per callable; the legacy ;! comments are gone.
+    expect(result.source).toContain('.contracts strict');
+    expect(result.source).toMatch(/\.routine\nGlim_DrawDot:/);
+    expect(result.source).not.toContain(';!');
     const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-dot-'));
     const entry = path.join(dir, 'dot.asm');
     writeFileSync(entry, result.source!);
@@ -307,7 +308,7 @@ describe('v0.2 runtime (slide example)', () => {
     expect(parseDiags).toEqual([]);
     const { source, diagnostics } = generateAzm(program!);
     expect(diagnostics).toEqual([]);
-    expect(source).toContain('@Snd_Arrive:');
+    expect(source).toContain('Snd_Arrive:');
     expect(source).toContain('ld      a,24');
     expect(source).toContain('ld      c,3');
     expect(source).toContain('jp      SndStart');
@@ -351,7 +352,7 @@ describe('v0.2 runtime (slide example)', () => {
     expect(source).toContain('.db     %11000000');
     expect(source).toContain('.db     %01000000');
     expect(source).toContain('ShapePtr:');
-    expect(source).toContain('@ShapeDraw:');
+    expect(source).toContain('ShapeDraw:');
     expect(source).toContain('call    FbPlot');
   });
 
@@ -367,7 +368,7 @@ describe('v0.2 runtime (slide example)', () => {
     expect(source).toContain('ld      (Next0),a');
     // Same-frame path: Twinkle (logic) updates Visible for render.
     expect(source).toContain('ld      (Raised0),a');
-    expect(source).toContain('@__MergeRaised:');
+    expect(source).toContain('GlimMergeRaised:');
     // End of frame rolls deferred raises over instead of clearing.
     expect(source).toContain('ld      a,(Next0)            ; deferred raises become next frame');
 
@@ -386,12 +387,12 @@ describe('v0.2 runtime (slide example)', () => {
     expect(source).toContain('call ShapeDraw');
 
     // Sound + HUD serviced per scan row; library present.
-    expect(source).toContain('@Snd_Arrive:');
+    expect(source).toContain('Snd_Arrive:');
     expect(source).toContain('call Snd_Arrive');
     expect(source).toContain('call    SndService');
     expect(source).toContain('call    HudScanDig');
-    expect(source).toContain('@SndStart:');
-    expect(source).toContain('@HudWriteU16:');
+    expect(source).toContain('SndStart:');
+    expect(source).toContain('HudWriteU16:');
   });
 
   it('generates held-binding autorepeat for the Dot example', () => {
@@ -399,7 +400,7 @@ describe('v0.2 runtime (slide example)', () => {
     const { program } = parseGlimmer(dotSrc);
     const { source } = generateAzm(program!);
     expect(source).toContain('Glim_HeldKey:');
-    expect(source).toContain('__PollNewPress:');
+    expect(source).toContain('_newpress:');
     expect(source).toContain('ld      (Glim_HeldCount),a');
   });
 
@@ -451,9 +452,9 @@ describe('CLI pipeline (generate + AZM contract injection)', () => {
     const status = await main([entry]);
     expect(status).toBe(0);
     const out = readFileSync(path.join(dir, 'dot.main.asm'), 'utf8');
-    // AZM inferred a tight contract for a movement block — far tighter
-    // than any guess Glimmer could safely make.
-    expect(out).toMatch(/;![^\n]*clobbers[^\n]*\n@Glim_MoveUp:/);
+    // Each block wrapper is a declared routine boundary; AZM infers
+    // its contract from the body under .contracts strict.
+    expect(out).toMatch(/\.routine\nGlim_MoveUp:/);
   });
 });
 
@@ -537,11 +538,11 @@ describe('routines', () => {
     'end',
   ].join('\n');
 
-  it('emits routines as public @ boundaries with verbatim bodies', () => {
+  it('emits routines as declared boundaries with verbatim bodies', () => {
     const { source, diagnostics } = compileToAzm(routineProgram);
     expect(diagnostics).toEqual([]);
     expect(source).toContain('; --- routine ClampX ---');
-    expect(source).toMatch(/@ClampX:\n    cp 8\n    ret c\n    ld a,7\n        ret/);
+    expect(source).toMatch(/\.routine\nClampX:\n    cp 8\n    ret c\n    ld a,7\n        ret/);
   });
 
   it('assembles with AZM and passes contract inference', async () => {
@@ -606,11 +607,11 @@ describe('cards', () => {
     expect(source).toContain('cp      Card.Splash');
     expect(source).toContain('cp      Card.Playing');
     expect(source).toMatch(
-      /ld {6}a,\(GlimActiveCard\)\n {8}cp {6}Card\.Splash\n {8}jr {6}nz,GlimSkip_Launch/,
+      /ld {6}a,\(GlimActiveCard\)\n {8}cp {6}Card\.Splash\n {8}jr {6}nz,_skip_Launch/,
     );
     // goto: transition after the (empty) body.
     expect(source).toMatch(
-      /@Glim_Launch:\n {8}ld {6}a,Card\.Playing {6}; goto Playing\n {8}ld {6}\(CurrentCard\),a/,
+      /Glim_Launch:\n {8}ld {6}a,Card\.Playing {6}; goto Playing\n {8}ld {6}\(CurrentCard\),a/,
     );
     // Enter block gated on its card, triggered by CurrentCard's flag.
     expect(source).toContain('; --- enter block SetupPlaying ---');
@@ -625,20 +626,20 @@ describe('cards', () => {
     // The latch sits in the main loop, before any dispatch.
     const loop = source!.indexOf('MainLoop:');
     const latch = source!.indexOf('ld      (GlimActiveCard),a', loop);
-    const firstDispatch = source!.indexOf('@__Run', loop);
+    const firstDispatch = source!.indexOf('GlimRun', loop);
     expect(latch).toBeGreaterThan(loop);
     expect(latch).toBeLessThan(firstDispatch);
     // No dispatch gate reads the live CurrentCard cell.
-    const dispatchRegion = source!.slice(firstDispatch, source!.indexOf('@Glim_'));
+    const dispatchRegion = source!.slice(firstDispatch, source!.indexOf('; --- logic block'));
     expect(dispatchRegion).not.toContain('ld      a,(CurrentCard)');
     expect(dispatchRegion).toContain('ld      a,(GlimActiveCard)');
   });
 
   it('dispatches enter blocks before other effects in their phase', () => {
     const { source } = compileToAzm(cardProgram);
-    const dispatch = source!.indexOf('@__RunLogicEffects:');
-    const setup = source!.indexOf('GlimSkip_SetupPlaying', dispatch);
-    const advance = source!.indexOf('GlimSkip_Advance', dispatch);
+    const dispatch = source!.indexOf('GlimRunLogicEffects:');
+    const setup = source!.indexOf('_skip_SetupPlaying', dispatch);
+    const advance = source!.indexOf('_skip_Advance', dispatch);
     expect(setup).toBeGreaterThan(dispatch);
     expect(advance).toBeGreaterThan(setup);
   });
@@ -687,7 +688,7 @@ describe('text resources, lcd_row, and any-key', () => {
     expect(source).toContain('ApiStringToLcd    .equ 13');
     expect(source).toContain('op lcd_row(msg imm16, row imm8)');
     // any-key raises before named-key dispatch, without a ret.
-    const poll = source!.indexOf('@__PollBindings:');
+    const poll = source!.indexOf('GlimPollBindings:');
     const anyRaise = source!.indexOf('ld      (AnyKey),a', poll);
     const named = source!.indexOf('cp      KEY_GO', poll);
     expect(anyRaise).toBeGreaterThan(poll);

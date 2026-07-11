@@ -221,6 +221,16 @@ export function generateAzm(
   emit();
   op(`.org    ${hex(org, 4)}`);
   emit();
+  if (isTec1g) {
+    emit('; Register contracts are declared with .routine and checked at');
+    emit('; strict strength over this whole generated file.');
+    op('.contracts strict');
+  } else {
+    emit('; The generic profile calls placeholder API addresses with no');
+    emit('; bodies to analyse, so contracts audit instead of failing.');
+    op('.contracts audit');
+  }
+  emit();
 
   profile.emitEquates(ctx);
 
@@ -339,16 +349,16 @@ export function generateAzm(
   profile.emitServiceStorage(ctx);
   emit();
 
-  // Data tables live here, above the first @ label: AZM scopes plain
-  // labels after an @ routine to that routine, so shared tables must be
-  // file-level to stay visible to every block and library routine.
+  // Data tables live here, ahead of the code: plain labels are
+  // file-level under AZM 0.3, but keeping every shared table above the
+  // first routine keeps the layout readable and the map stable.
   if (program.curves.length > 0) {
     emitCurveResources(program.curves, emit, op);
   }
   profile.emitDataTables(ctx);
 
   emit('; --- runtime loop ---');
-  emit('@Start:');
+  emit('Start:');
   profile.emitLoopInit(ctx);
   emit('MainLoop:');
   profile.emitFrameStart(ctx);
@@ -357,25 +367,25 @@ export function generateAzm(
     op('ld      (GlimActiveCard),a  ; frame start, never mid-frame');
   }
   if (hasTick) {
-    op('call    __TickTimers');
+    op('call    GlimTickTimers');
   }
   if (hasPhase('derive')) {
-    op('call    __RunDeriveEffects');
+    op('call    GlimRunDeriveEffects');
     if (anySameFrameRaise && (hasPhase('logic') || hasPhase('render'))) {
-      op('call    __MergeRaised');
+      op('call    GlimMergeRaised');
     }
   }
   if (hasPhase('logic')) {
-    op('call    __RunLogicEffects');
+    op('call    GlimRunLogicEffects');
     if (anySameFrameRaise && hasPhase('render')) {
-      op('call    __MergeRaised');
+      op('call    GlimMergeRaised');
     }
   }
   if (hasPhase('render')) {
-    op('call    __RunRenderEffects');
+    op('call    GlimRunRenderEffects');
   }
   profile.emitFrameEnd(ctx);
-  op('call    __EndFrame');
+  op('call    GlimEndFrame');
   op('jp      MainLoop');
   emit();
 
@@ -389,7 +399,8 @@ export function generateAzm(
     const effects = effectsByPhase.get(phase) ?? [];
     if (effects.length === 0) continue;
     emit(`; --- ${phase} phase dispatch ---`);
-    emit(`@__Run${capitalize(phase)}Effects:`);
+    emit('.routine');
+    emit(`GlimRun${capitalize(phase)}Effects:`);
     let pendingPrevSync = effects.some((e) => e.enter === true);
     for (const effect of effects) {
       if (pendingPrevSync && effect.enter !== true) {
@@ -405,7 +416,7 @@ export function generateAzm(
         // let the destination card's blocks run before its enters.
         op('ld      a,(GlimActiveCard)');
         op(`cp      Card.${effect.card}`);
-        op(`jr      nz,GlimSkip_${effect.name}`);
+        op(`jr      nz,_skip_${effect.name}`);
       }
       if (effect.enter === true && effect.card !== undefined) {
         // Edge gate: enter runs on a transition into the card, not on
@@ -413,27 +424,27 @@ export function generateAzm(
         // cell without switching cards).
         op('ld      a,(GlimPrevCard)');
         op(`cp      Card.${effect.card}`);
-        op(`jr      z,GlimSkip_${effect.name}`);
+        op(`jr      z,_skip_${effect.name}`);
       }
       const depMasks = sortedMaskEntries(groupMasksByBank(effect.depends));
       if (depMasks.length === 1) {
         const [bank] = depMasks[0] as [number, string[]];
         op(`ld      a,(${bankLabel('Changed', bank)})`);
         op(`and     ${depMaskName(effect, bank)}`);
-        op(`jr      z,GlimSkip_${effect.name}`);
+        op(`jr      z,_skip_${effect.name}`);
         op(`call    Glim_${effect.name}`);
-        emit(`GlimSkip_${effect.name}:`);
+        emit(`_skip_${effect.name}:`);
         continue;
       }
       for (const [bank] of depMasks) {
         op(`ld      a,(${bankLabel('Changed', bank)})`);
         op(`and     ${depMaskName(effect, bank)}`);
-        op(`jr      nz,GlimRun_${effect.name}`);
+        op(`jr      nz,_run_${effect.name}`);
       }
-      op(`jr      GlimSkip_${effect.name}`);
-      emit(`GlimRun_${effect.name}:`);
+      op(`jr      _skip_${effect.name}`);
+      emit(`_run_${effect.name}:`);
       op(`call    Glim_${effect.name}`);
-      emit(`GlimSkip_${effect.name}:`);
+      emit(`_skip_${effect.name}:`);
     }
     if (pendingPrevSync) {
       op('ld      a,(GlimActiveCard)');
@@ -445,7 +456,8 @@ export function generateAzm(
 
   if (anySameFrameRaise && (hasPhase('logic') || hasPhase('render'))) {
     emit('; --- phase boundary: deliver same-frame raises ---');
-    emit('@__MergeRaised:');
+    emit('.routine');
+    emit('GlimMergeRaised:');
     for (const bank of bankIndexes) {
       op(`ld      a,(${bankLabel('Changed', bank)})`);
       op('ld      b,a');
@@ -467,9 +479,11 @@ export function generateAzm(
 
   for (const routine of program.routines) {
     emit(`; --- routine ${routine.name} ---`);
-    emit(`@${routine.name}:`);
+    emit('.routine');
+    emit(`${routine.name}:`);
     // Verbatim body, same contract as blocks: falls through, the
-    // wrapper appends the ret; AZM infers the register contract.
+    // wrapper appends the ret; the bare .routine has AZM infer the
+    // register contract from the body.
     for (const line of routine.body) {
       emit(line);
     }
@@ -478,7 +492,8 @@ export function generateAzm(
   }
 
   emit('; --- frame rollover ---');
-  emit('@__EndFrame:');
+  emit('.routine');
+  emit('GlimEndFrame:');
   op('xor     a');
   for (const pulse of program.pulses) {
     op(`ld      (${pulse.name}),a`);
@@ -529,7 +544,8 @@ function emitTickTimers(
   raiseChanged: (cellName: string) => void,
 ): void {
   emit('; --- timers, ramps, frame counter ---');
-  emit('@__TickTimers:');
+  emit('.routine');
+  emit('GlimTickTimers:');
   if (frameCountUsed) {
     op(`ld      a,(${FRAME_COUNT})`);
     op('inc     a');
@@ -537,7 +553,7 @@ function emitTickTimers(
     raiseChanged(FRAME_COUNT);
   }
   for (const timer of program.timers) {
-    const skip = `__TimerNext_${timer.name}`;
+    const skip = `_next_${timer.name}`;
     if (timer.once) {
       if (timer.type === 'word') {
         op(`ld      hl,(${timer.name})`);
@@ -582,7 +598,7 @@ function emitTickTimers(
     emit(`${skip}:`);
   }
   for (const ramp of program.ramps) {
-    const skip = `__RampNext_${ramp.name}`;
+    const skip = `_next_${ramp.name}`;
     op(`ld      a,(${ramp.name})`);
     op(`cp      ${ramp.steps - 1}`);
     op(`jr      nc,${skip}           ; idle at terminal`);
@@ -608,11 +624,13 @@ function emitBlockWrapper(
   op: (text: string) => void,
 ): void {
   emit(`; --- ${effect.enter === true ? 'enter' : effect.phase} block ${effect.name} ---`);
-  emit(`@Glim_${effect.name}:`);
-  // The body is emitted byte-for-byte verbatim: AZM (>= 0.2.17) scopes
-  // plain labels to the enclosing @ routine, so two blocks may both
-  // define _done without colliding. Verbatim bodies are part of the
-  // label-anchored source-mapping contract.
+  emit('.routine');
+  emit(`Glim_${effect.name}:`);
+  // The body is emitted byte-for-byte verbatim. Under AZM 0.3, _name
+  // labels are local to the block's entry label, so two blocks may
+  // both define _done without colliding; plain labels in a body are
+  // file-level and would truncate the routine. Verbatim bodies are
+  // part of the label-anchored source-mapping contract.
   for (const line of effect.body) {
     emit(line);
   }

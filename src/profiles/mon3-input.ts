@@ -97,7 +97,8 @@ export function emitTec1gPollBindings(
   raiseChanged: (cellName: string) => void,
 ): void {
   emit('; --- input polling (MON-3 _scanKeys) ---');
-  emit('@__PollBindings:');
+  emit('.routine');
+  emit('GlimPollBindings:');
   if (program.bindings.length === 0) {
     op('ret');
     emit();
@@ -106,13 +107,13 @@ export function emitTec1gPollBindings(
   op('ld      c,ApiScanKeys');
   op('rst     $10');
   if (hasHeld) {
-    op('jr      z,__PollKeyDown');
+    op('jr      z,_keydown');
     op('ld      a,$FF                ; no key: disarm autorepeat');
     op('ld      (Glim_HeldKey),a');
     op('ret');
-    emit('__PollKeyDown:');
+    emit('_keydown:');
     op('ld      b,a                  ; B = key code (DE unsafe: matrix kbd)');
-    op('jr      c,__PollNewPress');
+    op('jr      c,_newpress');
     op('ld      a,(Glim_HeldKey)     ; held: autorepeat armed for this key?');
     op('cp      b');
     op('ret     nz');
@@ -125,17 +126,17 @@ export function emitTec1gPollBindings(
       const tag = `${binding.target}_${binding.key}`;
       op('ld      a,b');
       op(`cp      ${binding.key}`);
-      op(`jr      nz,__HeldNext_${tag}`);
+      op(`jr      nz,_held_${tag}`);
       op(`ld      a,${binding.period}`);
       op('ld      (Glim_HeldCount),a');
       op('ld      a,1');
       op(`ld      (${binding.target}),a`);
       raiseChanged(binding.target);
       op('ret');
-      emit(`__HeldNext_${tag}:`);
+      emit(`_held_${tag}:`);
     }
     op('ret');
-    emit('__PollNewPress:');
+    emit('_newpress:');
   } else {
     op('ret     nz                   ; no key pressed');
     op('ret     nc                   ; key held, not a new press');
@@ -153,7 +154,7 @@ export function emitTec1gPollBindings(
     const tag = `${binding.target}_${binding.key}`;
     op('ld      a,b');
     op(`cp      ${binding.key}`);
-    op(`jr      nz,__NewNext_${tag}`);
+    op(`jr      nz,_new_${tag}`);
     if (binding.edge === 'held') {
       op('ld      a,b                  ; arm autorepeat');
       op('ld      (Glim_HeldKey),a');
@@ -164,7 +165,7 @@ export function emitTec1gPollBindings(
     op(`ld      (${binding.target}),a`);
     raiseChanged(binding.target);
     op('ret');
-    emit(`__NewNext_${tag}:`);
+    emit(`_new_${tag}:`);
   }
   op('ret');
   emit();

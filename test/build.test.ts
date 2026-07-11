@@ -81,37 +81,33 @@ describe('glimmer build (d8 map rewrite)', () => {
   });
 });
 
-describe('computeBlockMappings (annotation tolerance)', () => {
-  it('maps every body line exactly around ;! and ; expects injections', async () => {
+describe('computeBlockMappings', () => {
+  it('maps every body line at its exact generated-asm line', async () => {
     const { computeBlockMappings } = await import('../src/build.js');
     const body = ['    ld a,1', '    call Helper', '    ld (X),a', '_done:', '    nop'];
     const asm = [
       '; header',
-      ';! clobbers A,F',
-      '@Glim_E:',
-      ';! in A',
+      '.routine',
+      'Glim_E:',
       '    ld a,1',
-      '    ; expects out A',
       '    call Helper',
       '    ld (X),a',
       '_done:',
-      '    ; expects out HL',
       '    nop',
       '        ret',
     ].join(String.fromCharCode(10));
     const { mappings, warnings } = computeBlockMappings(
       asm,
-      [{ label: '@Glim_E', name: 'E', body, bodyLine: 10 }],
+      [{ label: 'Glim_E', name: 'E', body, bodyLine: 10 }],
       'prog.glim',
     );
     expect(warnings).toEqual([]);
-    // Every body line maps, at its exact post-injection asm line.
     expect(mappings.map((m) => [m.asmLine, m.glimLine])).toEqual([
-      [5, 10],
-      [7, 11],
-      [8, 12],
-      [9, 13],
-      [11, 14],
+      [4, 10],
+      [5, 11],
+      [6, 12],
+      [7, 13],
+      [8, 14],
     ]);
   });
 });
@@ -132,9 +128,11 @@ describe('buildGlimmerProgram (programmatic API)', () => {
     expect(result.artifacts!.d8).toBe(path.join(dir, 'dot.main.d8.json'));
     expect(result.mappedSegments).toBeGreaterThan(0);
 
-    // The annotated asm has injected contracts; the map matches it.
+    // The generated asm declares its contracts inline; the map matches it.
     const asm = readFileSync(result.artifacts!.asm, 'utf8');
-    expect(asm).toContain(';!');
+    expect(asm).toContain('.contracts strict');
+    expect(asm).toContain('.routine');
+    expect(asm).not.toContain(';!');
     const map = readMap(dir, 'dot.main.d8.json');
     expect(map.fileList).toContain('dot.glim');
   });
@@ -146,11 +144,10 @@ describe('buildGlimmerProgram (programmatic API)', () => {
 
     const result = await buildGlimmerProgram(entry, { stage: 'generate' });
     expect(result.artifacts).toEqual({ asm: path.join(dir, 'dot.main.asm') });
-    // AZM never ran: user blocks carry no injected contracts (the
-    // profile library's curated ;! seeds are emitted by the generator
-    // itself and are expected), and no assembly artifacts exist.
+    // AZM never ran: no assembly artifacts exist, and the generated
+    // source already carries its .routine contract declarations.
     const asm = readFileSync(path.join(dir, 'dot.main.asm'), 'utf8');
-    expect(asm).not.toMatch(/;![^\n]*\n@Glim_/);
+    expect(asm).toContain('.routine');
     expect(existsSync(path.join(dir, 'dot.main.hex'))).toBe(false);
     expect(existsSync(path.join(dir, 'dot.main.d8.json'))).toBe(false);
   });

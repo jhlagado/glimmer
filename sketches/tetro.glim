@@ -114,13 +114,13 @@ text MsgPress   "PRESS ANY KEY"
 ; ----------------------------------------------------------------------
 
 routine CheckCollision
-;! in DE(x,y), B=rotation; out carry=blocked; clobbers A,HL
+.routine in DE,B out carry clobbers A,HL   ; DE=(x,y), B=rotation; carry=blocked
 begin
     ; body as corpus collision.asm CheckCollision
 end
 
 routine LockPiece
-;! clobbers A,BC,DE,HL
+.routine clobbers A,BC,DE,HL
 begin
     ; blit active piece into BoardRows/Red/Green/Blue,
     ; body as corpus board-lock.asm

@@ -48,9 +48,7 @@
       "sourceFile": "examples/dot.main.asm",
       "asm": "examples/dot.main.asm",
       "artifactBase": "dot",
-      "sourceRoots": [
-        "examples"
-      ]
+      "sourceRoots": ["examples"]
     },
     "slide": {
       "outputDir": "build",
@@ -80,9 +78,7 @@
       "sourceFile": "examples/slide.main.asm",
       "asm": "examples/slide.main.asm",
       "artifactBase": "slide",
-      "sourceRoots": [
-        "examples"
-      ]
+      "sourceRoots": ["examples"]
     },
     "trail": {
       "outputDir": "build",
@@ -112,9 +108,7 @@
       "sourceFile": "examples/trail.main.asm",
       "asm": "examples/trail.main.asm",
       "artifactBase": "trail",
-      "sourceRoots": [
-        "examples"
-      ]
+      "sourceRoots": ["examples"]
     },
     "snake": {
       "outputDir": "build",
@@ -144,9 +138,7 @@
       "sourceFile": "examples/snake.main.asm",
       "asm": "examples/snake.main.asm",
       "artifactBase": "snake",
-      "sourceRoots": [
-        "examples"
-      ]
+      "sourceRoots": ["examples"]
     },
     "tetro": {
       "outputDir": "build",
@@ -176,9 +168,7 @@
       "sourceFile": "examples/tetro.main.asm",
       "asm": "examples/tetro.main.asm",
       "artifactBase": "tetro",
-      "sourceRoots": [
-        "examples"
-      ]
+      "sourceRoots": ["examples"]
     },
     "sprite-chase": {
       "outputDir": "build",
@@ -208,9 +198,7 @@
       "sourceFile": "examples/sprite-chase.main.asm",
       "asm": "examples/sprite-chase.main.asm",
       "artifactBase": "sprite-chase",
-      "sourceRoots": [
-        "examples"
-      ]
+      "sourceRoots": ["examples"]
     },
     "tetro-glim": {
       "outputDir": "build",
@@ -240,9 +228,7 @@
       "sourceFile": "examples/tetro.glim",
       "asm": "examples/tetro.glim",
       "artifactBase": "tetro",
-      "sourceRoots": [
-        "examples"
-      ]
+      "sourceRoots": ["examples"]
     },
     "sprite-chase-glim": {
       "outputDir": "build",
@@ -272,9 +258,7 @@
       "sourceFile": "examples/sprite-chase.glim",
       "asm": "examples/sprite-chase.glim",
       "artifactBase": "sprite-chase",
-      "sourceRoots": [
-        "examples"
-      ]
+      "sourceRoots": ["examples"]
     }
   }
 }

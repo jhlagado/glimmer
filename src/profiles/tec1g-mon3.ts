@@ -59,7 +59,8 @@ function emitSoundCues(
   emit('; Non-blocking matrix-profile cues. len is row ticks; div is the');
   emit('; speaker divider. Starting a cue replaces the currently active cue.');
   for (const sound of program.sounds) {
-    emit(`@Snd_${sound.name}:`);
+    emit('.routine');
+    emit(`Snd_${sound.name}:`);
     op(`ld      a,${sound.len}`);
     op(`ld      c,${sound.div}`);
     op('jp      SndStart');
@@ -83,11 +84,11 @@ function emitMatrixLibrary(
   emit('; Scan all 8 rows with fixed dwell, then blank the matrix so');
   emit('; block work never changes visible row brightness. Sound and the');
   emit('; seven-segment HUD are serviced once per row (8 ticks per frame).');
-  emit(';! clobbers  A,BC,DE,HL');
-  emit('@ScanFrame:');
+  emit('.routine clobbers A,BC,DE,HL');
+  emit('ScanFrame:');
   op('ld      hl,Framebuffer');
   op('ld      c,%00000001          ; row select mask');
-  emit('ScanFrameRow:');
+  emit('_row:');
   op('xor     a');
   op('out     (PortRow),a          ; blank before changing colour data');
   op('ld      a,(hl)');
@@ -109,30 +110,30 @@ function emitMatrixLibrary(
   op('pop     hl');
   op('pop     bc');
   op('ld      b,ScanDwellPeriod');
-  emit('ScanFrameDwell:');
-  op('djnz    ScanFrameDwell');
+  emit('_dwell:');
+  op('djnz    _dwell');
   op('rlc     c');
-  op('jr      nc,ScanFrameRow      ; carry after 8th rotate');
+  op('jr      nc,_row      ; carry after 8th rotate');
   op('xor     a');
   op('out     (PortRow),a          ; matrix blank on return');
   op('ret');
   emit();
   emit('; Convert x (0-7, 0 = leftmost) to the matrix bit convention.');
-  emit(';! in A; out A; clobbers B');
-  emit('@MxMask:');
+  emit('.routine in A out A clobbers B');
+  emit('MxMask:');
   op('or      a');
   op('ld      b,a');
   op('ld      a,%10000000');
   op('ret     z');
-  emit('MxMaskLp:');
+  emit('_loop:');
   op('srl     a');
-  op('djnz    MxMaskLp');
+  op('djnz    _loop');
   op('ret');
   emit();
   emit('; Set one pixel. B = x (0-7), C = y (0-7), A = colour bits');
   emit('; (COLOR_RED/GREEN/BLUE, OR-combined). ORs into the framebuffer.');
-  emit(';! in A,B,C; clobbers A,B,DE,HL');
-  emit('@FbPlot:');
+  emit('.routine in A,B,C clobbers A,B,DE,HL');
+  emit('FbPlot:');
   op('ld      d,a                  ; D = colour bits');
   op('ld      a,c');
   op('add     a,a');
@@ -149,18 +150,18 @@ function emitMatrixLibrary(
   op('adc     a,0');
   op('ld      h,a');
   op('srl     d');
-  op('jr      nc,FbPlotGrn');
+  op('jr      nc,_green');
   op('ld      a,(hl)');
   op('or      b');
   op('ld      (hl),a');
-  emit('FbPlotGrn:');
+  emit('_green:');
   op('inc     hl');
   op('srl     d');
-  op('jr      nc,FbPlotBlu');
+  op('jr      nc,_blue');
   op('ld      a,(hl)');
   op('or      b');
   op('ld      (hl),a');
-  emit('FbPlotBlu:');
+  emit('_blue:');
   op('inc     hl');
   op('srl     d');
   op('ret     nc');
@@ -172,8 +173,8 @@ function emitMatrixLibrary(
   if (hasShapes) {
     emit('; Draw a shape resource. HL = Shape_<Name>, B = x, C = y.');
     emit('; No clipping: keep the whole shape inside the 8x8 matrix.');
-    emit(';! in B,C,HL; clobbers A,BC,DE,HL');
-    emit('@ShapeDraw:');
+    emit('.routine in B,C,HL clobbers A,BC,DE,HL');
+    emit('ShapeDraw:');
     op('ld      (ShapePtr),hl');
     op('ld      a,b');
     op('ld      (ShapeBaseX),a');
@@ -191,7 +192,7 @@ function emitMatrixLibrary(
     op('ld      (ShapePtr),hl');
     op('xor     a');
     op('ld      (ShapeRowIndex),a');
-    emit('ShapeDrawRow:');
+    emit('_row:');
     op('ld      a,(ShapeRowIndex)');
     op('ld      b,a');
     op('ld      a,(ShapeHeight)');
@@ -204,15 +205,15 @@ function emitMatrixLibrary(
     op('ld      (ShapePtr),hl');
     op('xor     a');
     op('ld      (ShapeColIndex),a');
-    emit('ShapeDrawCol:');
+    emit('_col:');
     op('ld      a,(ShapeColIndex)');
     op('ld      b,a');
     op('ld      a,(ShapeWidth)');
     op('cp      b');
-    op('jr      z,ShapeDrawNextRow');
+    op('jr      z,_nextrow');
     op('ld      a,(ShapeRowMask)');
     op('bit     7,a');
-    op('jr      z,ShapeDrawSkipPixel');
+    op('jr      z,_skip');
     op('ld      a,(ShapeBaseX)');
     op('ld      b,a');
     op('ld      a,(ShapeColIndex)');
@@ -225,37 +226,37 @@ function emitMatrixLibrary(
     op('ld      c,a');
     op('ld      a,(ShapeColor)');
     op('call    FbPlot');
-    emit('ShapeDrawSkipPixel:');
+    emit('_skip:');
     op('ld      a,(ShapeRowMask)');
     op('add     a,a');
     op('ld      (ShapeRowMask),a');
     op('ld      a,(ShapeColIndex)');
     op('inc     a');
     op('ld      (ShapeColIndex),a');
-    op('jr      ShapeDrawCol');
-    emit('ShapeDrawNextRow:');
+    op('jr      _col');
+    emit('_nextrow:');
     op('ld      a,(ShapeRowIndex)');
     op('inc     a');
     op('ld      (ShapeRowIndex),a');
-    op('jr      ShapeDrawRow');
+    op('jr      _row');
     emit();
   }
   emit('; Clear the whole framebuffer.');
-  emit(';! clobbers  A,B,HL');
-  emit('@FbClear:');
+  emit('.routine clobbers A,B,HL');
+  emit('FbClear:');
   op('ld      hl,Framebuffer');
   op('ld      b,32');
   op('xor     a');
-  emit('FbClearLp:');
+  emit('_loop:');
   op('ld      (hl),a');
   op('inc     hl');
-  op('djnz    FbClearLp');
+  op('djnz    _loop');
   op('ret');
   emit();
   emit('; (Re)start a sound cue. A = duration in row ticks (8 per frame),');
   emit('; C = divider half-period; smaller is higher pitch.');
-  emit(';! in A,C; clobbers A');
-  emit('@SndStart:');
+  emit('.routine in A,C clobbers A');
+  emit('SndStart:');
   op('ld      (SoundTimer),a');
   op('ld      a,c');
   op('ld      (SndDivReload),a');
@@ -265,19 +266,19 @@ function emitMatrixLibrary(
   op('ret');
   emit();
   emit('; Tick the speaker state machine once per row scan.');
-  emit(';! clobbers A');
-  emit('@SndService:');
+  emit('.routine clobbers A');
+  emit('SndService:');
   op('ld      a,(SoundTimer)');
   op('or      a');
   op('ret     z');
   op('dec     a');
   op('ld      (SoundTimer),a');
-  op('jr      nz,SndActive');
+  op('jr      nz,_active');
   op('xor     a');
   op('ld      (SpeakerPort),a');
   op('ld      (SndDivCount),a');
   op('ret');
-  emit('SndActive:');
+  emit('_active:');
   op('ld      a,(SndDivCount)');
   op('dec     a');
   op('ld      (SndDivCount),a');
@@ -290,8 +291,8 @@ function emitMatrixLibrary(
   op('ret');
   emit();
   emit('; Strobe one seven-segment digit and advance the scan index.');
-  emit(';! clobbers A,BC,DE,HL');
-  emit('@HudScanDig:');
+  emit('.routine clobbers A,BC,DE,HL');
+  emit('HudScanDig:');
   op('ld      a,(HudScanIndex)');
   op('ld      c,a');
   op('ld      a,(SpeakerPort)');
@@ -316,28 +317,28 @@ function emitMatrixLibrary(
   op('ld      a,c');
   op('inc     a');
   op('cp      6');
-  op('jr      c,HudScanSave');
+  op('jr      c,_save');
   op('xor     a');
-  emit('HudScanSave:');
+  emit('_save:');
   op('ld      (HudScanIndex),a');
   op('ret');
   emit();
   emit('; Zero all six HUD digits.');
-  emit(';! clobbers A,B,HL');
-  emit('@HudBlankDig:');
+  emit('.routine clobbers A,B,HL');
+  emit('HudBlankDig:');
   op('ld      hl,HudSegBuffer');
   op('ld      b,6');
   op('xor     a');
-  emit('HudBlankLp:');
+  emit('_loop:');
   op('ld      (hl),a');
   op('inc     hl');
-  op('djnz    HudBlankLp');
+  op('djnz    _loop');
   op('ret');
   emit();
   emit('; Encode HL as decimal into the HUD: slot 0 shows 0, slots 1-5');
   emit('; the 10000..1 digits.');
-  emit(';! in HL; out BC,HL; clobbers A,DE');
-  emit('@HudWriteU16:');
+  emit('.routine in HL out BC,HL clobbers A,DE');
+  emit('HudWriteU16:');
   op('ld      a,(HudGlyphTbl)');
   op('ld      (HudSegBuffer),a');
   op('ld      bc,HudSegBuffer + 1');
@@ -354,25 +355,25 @@ function emitMatrixLibrary(
   op('ret');
   emit();
   emit('; One decimal place value: count DE out of HL, emit the glyph.');
-  emit(';! in HL,DE,BC; out BC,HL; clobbers A,DE');
-  emit('@HudDecDigit:');
+  emit('.routine in HL,DE,BC out BC,HL clobbers A,DE');
+  emit('HudDecDigit:');
   op('xor     a');
-  emit('HudDecLp:');
+  emit('_loop:');
   op('push    af');
   op('ld      a,h');
   op('cp      d');
-  op('jr      c,HudDecDone');
-  op('jr      nz,HudDecSub');
+  op('jr      c,_done');
+  op('jr      nz,_sub');
   op('ld      a,l');
   op('cp      e');
-  op('jr      c,HudDecDone');
-  emit('HudDecSub:');
+  op('jr      c,_done');
+  emit('_sub:');
   op('pop     af');
   op('or      a');
   op('sbc     hl,de');
   op('inc     a');
-  op('jr      HudDecLp');
-  emit('HudDecDone:');
+  op('jr      _loop');
+  emit('_done:');
   op('pop     af');
   op('push    hl');
   op('push    bc');
@@ -450,9 +451,9 @@ export const tec1gMatrixProfile: Profile = {
   headerNote(): string[] {
     return [
       ';',
-      '; Register contracts (the ;! comments) are inferred and injected',
-      '; by AZM during the Glimmer build, using the same parameters',
-      '; Debug80 uses: --contracts --rc error --reg-profile mon3.',
+      '; Register contracts are declared with .routine and checked by',
+      '; AZM at strict strength (mon3 register profile) during the',
+      '; Glimmer build.',
     ];
   },
   emitEquates({ program, emit }: ProfileContext): void {
@@ -521,7 +522,7 @@ export const tec1gMatrixProfile: Profile = {
   },
   emitFrameStart({ op }: ProfileContext): void {
     op('call    ScanFrame            ; show one full frame, then blank');
-    op('call    __PollBindings       ; game work runs in the blank window');
+    op('call    GlimPollBindings     ; game work runs in the blank window');
   },
   emitFrameEnd(): void {},
   emitPollBindings({ program, emit, op, raiseChanged, heldBindings }: ProfileContext): void {

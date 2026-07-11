@@ -23,9 +23,9 @@ The essential contract is:
 
 The generated AZM is the canonical interface: AZM assembles it into Intel
 HEX, flat binary, and `.d8.json` Debug80 maps, and Debug80 debugs it at
-source level. The CLI also runs AZM in contract-injection mode by default
-as a convenience, so the written file carries AZM's inferred `;!` register
-contracts. Keeping generated AZM readable serves the project's
+source level. The CLI also runs AZM's register-contract checking by
+default as a convenience — the written file declares `.contracts` policy
+and a `.routine` boundary per callable, so AZM verifies it as written. Keeping generated AZM readable serves the project's
 transparency principle — the user can always inspect what Glimmer wrote.
 
 ## Ecosystem

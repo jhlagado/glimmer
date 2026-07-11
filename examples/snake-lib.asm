@@ -1,5 +1,5 @@
 ; Snake support module — hand-written AZM, brought into the program
-; with Glimmer's import statement. @ labels are the public API; plain
+; with Glimmer's import statement. @ marks the exported API; plain
 ; labels and the scratch bytes stay private to this unit.
 ;
 ; Positions are packed y*8+x (0..63). The module reads the program's
@@ -9,7 +9,7 @@
 ; Test whether a packed position is occupied by the snake body:
 ; scans Len cells backwards from HeadIdx. Preserves D so callers can
 ; carry a position across the call.
-;! in A; out carry,zero; clobbers sign,parity,halfCarry
+.routine in A out carry,zero clobbers sign,parity,halfCarry
 @BodyContains:
         ld      e,a
         ld      a,(Len)
@@ -42,7 +42,7 @@ BodyScanHit:
         ret
 
 ; Plot one packed position. A = position, D = colour bits.
-;! in A,D; out D; clobbers F
+.routine in A,D out D clobbers F
 @PlotPos:
         ld      e,a
         and     %00000111
@@ -59,7 +59,7 @@ BodyScanHit:
 
 ; Draw the whole body: Len cells backwards from HeadIdx in green,
 ; then the head again in white (FbPlot ORs, so white wins).
-;! out D; clobbers F
+.routine out D clobbers F
 @DrawBody:
         ld      a,(Len)
         or      a

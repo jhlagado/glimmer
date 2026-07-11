@@ -3,7 +3,7 @@
  *
  * AZM's `.d8.json` map attributes address ranges to generated-asm lines.
  * Glimmer wrote those lines, so it knows which came from `.glim` block
- * bodies: every block compiles under an `@Glim_<Name>:` entry label and
+ * bodies: every block compiles under a `Glim_<Name>:` entry label and
  * its body is copied byte-for-byte verbatim (the label-anchored mapping
  * contract). This module re-attributes body segments to their `.glim`
  * source, leaving generated glue attributed to the generated `.asm` —
@@ -11,7 +11,7 @@
  * generated AZM for glue.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { compile } from '@jhlagado/azm/compile';
@@ -38,9 +38,9 @@ export interface BlockMappingsResult {
   warnings: string[];
 }
 
-/** Anything with a verbatim body anchored at a generated @ label. */
+/** Anything with a verbatim body anchored at a generated entry label. */
 export interface MappableBlock {
-  /** The @-label line that anchors the body, without the colon. */
+  /** The entry-label line that anchors the body, without the colon. */
   label: string;
   name: string;
   body: readonly string[];
@@ -48,21 +48,21 @@ export interface MappableBlock {
   file?: string;
 }
 
-/** Effects anchor at @Glim_<Name>, routines at their own @<Name>. */
+/** Effects anchor at Glim_<Name>, routines at their own <Name>. */
 export function mappableBlocks(
   effects: readonly EffectDecl[],
   routines: readonly RoutineDecl[] = [],
 ): MappableBlock[] {
   return [
     ...effects.map((effect) => ({
-      label: `@Glim_${effect.name}`,
+      label: `Glim_${effect.name}`,
       name: effect.name,
       body: effect.body,
       bodyLine: effect.bodyLine,
       ...(effect.file !== undefined ? { file: effect.file } : {}),
     })),
     ...routines.map((routine) => ({
-      label: `@${routine.name}`,
+      label: routine.name,
       name: routine.name,
       body: routine.body,
       bodyLine: routine.bodyLine,
@@ -71,20 +71,12 @@ export function mappableBlocks(
   ];
 }
 
-/** A line AZM's annotation pass may insert inside or around a body. */
-function isInjectedAnnotation(line: string): boolean {
-  const trimmed = line.trim();
-  return trimmed.startsWith(';!') || trimmed.startsWith('; expects ');
-}
-
 /**
- * Locate every block body line in the final generated asm text. The
- * asm is scanned as written to disk — after AZM contract injection —
- * so line numbers agree with the `.d8.json` produced from that same
- * file. Bodies are matched line by line, skipping the annotation lines
- * AZM may inject (`;!` contracts adjacent to labels and `; expects`
- * notes at call sites); a body line that does not match is skipped
- * with a warning rather than mapped wrongly.
+ * Locate every block body line in the generated asm text — the file on
+ * disk is exactly what the generator wrote (AZM 0.3 never rewrites
+ * it), so line numbers agree with the `.d8.json` produced from it.
+ * Bodies are matched line by line; a body line that does not match is
+ * skipped with a warning rather than mapped wrongly.
  */
 export function computeBlockMappings(
   asmText: string,
@@ -109,13 +101,6 @@ export function computeBlockMappings(
     let matched = true;
     const blockMappings: BlockLineMapping[] = [];
     for (let k = 0; k < block.body.length; k += 1) {
-      while (
-        cursor < lines.length &&
-        lines[cursor] !== block.body[k] &&
-        isInjectedAnnotation(lines[cursor] ?? '')
-      ) {
-        cursor += 1;
-      }
       if (lines[cursor] !== block.body[k]) {
         warnings.push(`block ${block.name}: body is not verbatim at ${label}; not mapped.`);
         matched = false;
@@ -231,8 +216,8 @@ export interface GlimmerBuildOptions {
   /**
    * How far to take the build:
    * - 'generate' — write the AZM source only;
-   * - 'check' — also run AZM contract inference/checking and inject
-   *   the `;!` contracts (the plain CLI command);
+   * - 'check' — also run AZM register-contract checking (the generated
+   *   file declares `.contracts strict`) without assembling;
    * - 'build' (default) — also assemble `.hex`/`.bin`/`.d8.json` and
    *   rewrite the debug map to step block bodies in `.glim` source.
    */
@@ -336,11 +321,12 @@ function reattributeDiagnostics(
 }
 
 /**
- * Compile a `.glim` program end to end, in process: generate AZM, have
- * AZM infer and inject register contracts (checked at `--rc error`
- * strength, mon3 profile for MON-3 programs), assemble the annotated
- * file to `.hex`/`.bin`/`.d8.json`, and rewrite the debug map so block
- * bodies step in `.glim` source.
+ * Compile a `.glim` program end to end, in process: generate AZM
+ * (which declares `.contracts strict` and a `.routine` contract per
+ * callable), assemble it in one AZM pass to `.hex`/`.bin`/`.d8.json`
+ * — contract checking rides along, mon3 register profile for MON-3
+ * programs — and rewrite the debug map so block bodies step in `.glim`
+ * source.
  *
  * This is the API a host (the CLI, Debug80) calls — it writes the
  * artifact files but never prints; all reporting comes back as values.
@@ -376,42 +362,49 @@ export async function buildGlimmerProgram(
     return { diagnostics: loadDiagnostics, artifacts: { asm: asmPath }, warnings };
   }
 
-  // Pass 1: contract inference + checking; AZM returns the annotated
-  // source as an artifact and we write it back over the generated file.
+  // The generated file carries its own `.contracts strict` directive,
+  // so contract checking rides the ordinary compile; the mon3 register
+  // profile models the RST $10 monitor calls MON-3 programs make.
   const isTec1g = program.platform === 'tec1g-mon3';
-  const checked = await compile(asmPath, {
-    registerContracts: 'error',
-    fixRegisterContracts: true,
-    ...(isTec1g ? { registerContractsProfile: 'mon3' } : {}),
-    skipAssembly: true,
-  });
-  const checkDiagnostics = [
-    ...loadDiagnostics,
-    ...reattributeDiagnostics(
-      fromAzmDiagnostics(checked.diagnostics),
-      generated.source,
-      asmPath,
-      program,
-      entryPath,
-    ),
-  ];
-  if (hasErrors(checkDiagnostics)) {
-    return { diagnostics: checkDiagnostics, warnings };
-  }
-  for (const artifact of checked.artifacts) {
-    if (artifact.kind === 'register-contracts-annotations') {
-      for (const file of artifact.files) {
-        writeFileSync(file.path, file.text);
-      }
-    }
-  }
+  const profileOptions = {
+    ...(isTec1g ? { registerContractsProfile: 'mon3' as const } : {}),
+    // User routines carry bare .routine declarations: their outputs are
+    // whatever the body produces, so AZM's inferred output candidates
+    // are accepted rather than held for review.
+    ...(program.routines.length > 0
+      ? {
+          acceptRegisterOutputCandidates: program.routines.map(
+            (routine) => `${routine.name}:AF,BC,DE,HL,IX,IY`,
+          ),
+        }
+      : {}),
+  };
   if (stage === 'check') {
-    return { diagnostics: checkDiagnostics, artifacts: { asm: asmPath }, warnings };
+    const checked = await compile(asmPath, {
+      registerContracts: 'error',
+      ...profileOptions,
+      skipAssembly: true,
+    });
+    const checkDiagnostics = [
+      ...loadDiagnostics,
+      ...reattributeDiagnostics(
+        fromAzmDiagnostics(checked.diagnostics),
+        generated.source,
+        asmPath,
+        program,
+        entryPath,
+      ),
+    ];
+    return {
+      diagnostics: checkDiagnostics,
+      ...(hasErrors(checkDiagnostics) ? {} : { artifacts: { asm: asmPath } }),
+      warnings,
+    };
   }
 
-  // Pass 2: assemble the annotated file. A separate pass matters —
-  // injection changed the file, and the map's line numbers must agree
-  // with the file as it now stands on disk.
+  // One AZM pass: contract checking and assembly together. Nothing
+  // rewrites the generated file, so the map's line numbers agree with
+  // the source exactly as the generator wrote it.
   const base = asmPath.replace(/\.asm$/, '');
   const hexPath = `${base}.hex`;
   const binPath = `${base}.bin`;
@@ -421,14 +414,14 @@ export async function buildGlimmerProgram(
     emitHex: true,
     emitBin: true,
     emitD8m: true,
+    ...profileOptions,
     d8mInputs: { hex: path.basename(hexPath), bin: path.basename(binPath) },
   });
-  const annotatedText = readFileSync(asmPath, 'utf8');
   const diagnostics = [
-    ...checkDiagnostics,
+    ...loadDiagnostics,
     ...reattributeDiagnostics(
       fromAzmDiagnostics(assembled.diagnostics),
-      annotatedText,
+      generated.source,
       asmPath,
       program,
       entryPath,
@@ -438,8 +431,8 @@ export async function buildGlimmerProgram(
     return { diagnostics, warnings };
   }
 
-  // Rewrite the map against the annotated asm, then write everything.
-  const asmText = annotatedText;
+  // Rewrite the map against the generated asm, then write everything.
+  const asmText = generated.source;
   const entryDir = path.dirname(entryPath);
   const outDir = path.dirname(asmPath);
   const entryBase = path.basename(entryPath);
