@@ -3,7 +3,35 @@
 Versions are tagged in git and published to npm as `@jhlagado/glimmer`
 (0.4.0 is the first broadly usable published version).
 
-## 0.5.0 - 2026-07-11
+## 0.5.1 - 2026-07-11
+
+Review pass over the AZM 0.3 migration. 0.5.0 was tagged but never
+published; 0.5.1 is the publish target.
+
+- Example-library contracts are audited-accurate. AZM 0.3 trusts
+  `.routine` clauses and treats unlisted registers as preserved, so the
+  clauses transcribed from the old `;!` comments (which under-declared
+  clobbers on eleven routines) were silent miscompilation approvals.
+  snake-lib.asm also still had plain internal labels truncating its
+  `.routine` regions — now owner-local `_name` labels.
+- `glimmer build` contract-checks imported units at the same strength
+  as the check stage (`registerContracts: 'error'` on the assembly
+  pass; files without an in-file `.contracts` directive were previously
+  skipped by the build stage entirely). Regression-tested.
+- Contract policy lives on the Profile seam (`contractPolicy`,
+  `registerContractsProfile`) instead of platform if/elses in the
+  generator and build pipeline.
+- Shared `emitRoutine`/`blockEntryLabel` helpers own the
+  directive/label pairing and the block-label naming contract.
+- GlimCommit's checker-appeasing register define shrank to `ld b,d`
+  (tms9918 binaries are +1 byte vs 0.4.0, down from +2) and its comment
+  says it exists for AZM's stale-register analysis.
+- Leading-underscore rejection covers card and type-field names.
+- CLI help and messages no longer describe the removed contract
+  injection; CLAUDE.md's canonical-output and examples-gitignored
+  bullets corrected.
+
+## 0.5.0 - 2026-07-11 (tagged, not published)
 
 The AZM 0.3 migration: Glimmer generates and consumes AZM 0.3.2 syntax
 and metadata, removing Debug80's need for a nested legacy AZM.
