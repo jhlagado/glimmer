@@ -25,13 +25,11 @@ game-only.
 
 ## Status
 
-Version 0.2.0 is the language-complete line: everything the headline
-game needs, exercised end to end by `examples/tetro.glim` — falling pieces, held-key
-movement, rotation, line clears, a difficulty curve, and splash /
-pause / game-over screens, written entirely in shipped constructs and
-assembling strict-clean under AZM's register-contract checking
-(behavioral playtesting under Debug80 is the remaining acceptance
-step, tracked in the release plans).
+Version 0.5.3 is the current release line. Glimmer targets AZM 0.3.4,
+generates explicit `.routine` boundaries under an in-file `.contracts`
+policy, and is integrated into Debug80 as a native `.glim` source format.
+The repository's default Debug80 target builds and debugs
+`examples/tetro.glim` directly.
 
 The language: scalar, array, and typed state (layout types compiled to
 AZM `.type` records), pulses, timers and ramps, held/rising key
@@ -40,14 +38,14 @@ callable routines, cards (screens/modes with `enter` blocks and `goto`
 navigation), sound cues, curve tables, matrix shapes, multi-file
 programs (`part`), and hand-written AZM module imports.
 
-The toolchain: `glimmer build` compiles, injects AZM-inferred register
-contracts, assembles to `.hex`/`.bin`/`.d8.json`, and rewrites the
-Debug80 map so **breakpoints and stepping land in your `.glim` source**
-for block bodies while generated glue stays in readable AZM. The same
-pipeline is a programmatic API (`@jhlagado/glimmer/build`) shaped like
-AZM's compile API, ready for native Debug80 integration.
+The toolchain: `glimmer build` generates AZM, checks its declared and
+inferred register contracts, assembles to `.hex`/`.bin`/`.d8.json`, and
+rewrites the Debug80 map so **breakpoints and stepping land in your `.glim`
+source** for block bodies while generated glue stays in readable AZM. The
+same pipeline is a programmatic API (`@jhlagado/glimmer/build`) shaped like
+AZM's compile API and consumed by Debug80's native Glimmer backend.
 
-Version 0.4.0 completes the data story: pieces, sprites, tiles, and
+Version 0.4.0 completed the data story: pieces, sprites, tiles, and
 LCD messages are declarations — `shape` rotation groups generate the
 corpus piece-engine tables, `sprite`/`tile` resources generate patterns,
 colour groups, and the VRAM upload, `text` brings the LCD slice — and
@@ -126,12 +124,11 @@ npm run typecheck
 npm run lint
 npm test          # includes a round trip that assembles generated AZM
 
-# The CLI runs AZM automatically after generating (--contracts --rc
-# error, with the mon3 profile for MON-3 programs): AZM infers register
-# contracts for every routine and injects them into the file. Skip with
-# --no-check. Full strict checking:
-npx azm --rc strict --reg-profile mon3 examples/dot.main.asm
-npm run format
+# The generated file declares its contract policy and routine boundaries.
+# The CLI checks them with AZM automatically; --no-check stops after
+# generation. Manual assembly uses the same MON-3 register profile:
+npx azm --reg-profile mon3 examples/dot.main.asm
+npm run format:check
 ```
 
 ## License

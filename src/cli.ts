@@ -13,9 +13,11 @@
  * the Debug80 map so block bodies step in .glim source.
  */
 
+import { realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
 import type { GlimmerProgram } from './model.js';
 import { buildGlimmerProgram, type BuildDiagnostic } from './build.js';
@@ -222,8 +224,21 @@ export async function main(argv: string[]): Promise<number> {
   return 0;
 }
 
-const invokedDirectly =
-  process.argv[1] !== undefined && import.meta.url === new URL(`file://${process.argv[1]}`).href;
-if (invokedDirectly) {
+/**
+ * True when this file is the entry script, including through the npm
+ * bin symlink: argv[1] is the symlink path while import.meta.url is
+ * the resolved real file, so compare after realpath resolution.
+ */
+function invokedDirectly(): boolean {
+  const argv1 = process.argv[1];
+  if (argv1 === undefined) return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(argv1)).href;
+  } catch {
+    return false;
+  }
+}
+
+if (invokedDirectly()) {
   void main(process.argv.slice(2)).then((code) => process.exit(code));
 }

@@ -67,7 +67,10 @@ dispatch — collision checks, geometry. Emitted as `@Glim_<Name>` (or
 other routine. Snake worked around this with a hand-written imported
 module; the language should not force that.
 
-- Open point: pass `;!` contract seeds through from `.glim` source
+- Open point (historical; superseded): pass `;!` contract seeds through
+  from `.glim` source. AZM 0.3.3 verifies declared `.routine` clauses
+  against bodies; Glimmer's remaining work is source-level clause syntax
+  — see `docs/roadmap.md`.
   (roadmap register-contracts note) or leave inference to AZM.
 
 ## 4. Small language/tooling items riding along

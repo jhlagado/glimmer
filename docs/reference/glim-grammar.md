@@ -309,39 +309,13 @@ semantic. Pulses clear at the end of every frame; deferred raises
 become the next frame's changes. That is the whole model; `->` is its
 only symbol.
 
-## Proposed grammar (sketches — not implemented)
+## Deferred extensions
 
-From `sketches/tetro.glim` and `sketches/sprite-chase.glim`. Each
-proposal is held to the same symbol rules. (Timers, ramps, and held
-bindings graduated to the implemented grammar in v0.2.)
-
-```text
-routine-decl    ::= "routine" identifier
-                    contract-comment?
-                    "begin" newline azm-line* "end"
-
-card-decl       ::= "card" identifier
-                  ; a section header with no closing keyword: the card
-                  ; contains every following declaration until the next
-                  ; card-decl or end of file.
-goto-clause     ::= "goto" identifier
-                  ; block header line: if this block runs, switch cards
-                  ; after its body. Unconditional once the block runs —
-                  ; conditional navigation is a state flag plus a
-                  ; header-only routing block.
-                  ; With goto (or any header-only block), the AZM body
-                  ; is optional: routing blocks close with a bare "end".
-enter-effect    ::= "enter" effect-decl
-
-rotation-decl   ::= "shape" identifier "rotations"
-                    rotation-row* "end"
-                  ; later extension to implemented matrix shape resources.
-text-decl       ::= "text" identifier string
-sprite-decl     ::= "sprite" identifier "color" color-name
-                    pixel-row* "end"
-tile-decl       ::= "tile" identifier "color" color-name
-                    ( "on" color-name )? pixel-row* "end"
-```
+The old sketches proposed routines, cards, navigation, rotational shapes,
+text, sprites, and tiles; all now appear in the implemented grammar above.
+Remaining syntax is deliberately unsettled until a program requires it:
+source-level clauses for AZM routine contracts, namespaced `.glim`
+libraries, and richer platform-specific resources and bindings.
 
 ## Settled syntax decisions (2026-07-06)
 
@@ -370,16 +344,14 @@ tile-decl       ::= "tile" identifier "color" color-name
   clause's real job: notifying Glimmer of mutation without it reading
   the Z80. The clause stays explicit even where a static scan of the
   body could infer it: it is the effect's outward contract and covers
-  writes through pointers. A future lint should warn when a body
-  visibly updates a declared cell that is not listed.
+  writes through pointers. The compiler warns when a direct store visibly
+  updates a declared cell that is not listed; pointer writes remain beyond
+  that intentionally narrow lint.
 
-- **Uniqueness is Glimmer's job; AZM is the backstop (2026-07-07).**
-  Block-local `_labels` are Glim syntax, compiled away into globally
-  unique `Glim_<Effect>_<label>` names — the generated file contains
-  only globally unique labels, so Glimmer does not depend on any future
-  AZM local-symbol scoping. The rewrite stays even if AZM gains it: the
-  qualified name carries the block's identity into the symbol map and
-  the debugger, and it is part of the label-anchored mapping contract.
+- **Uniqueness is Glimmer's job; AZM is the backstop.** Declared Glimmer
+  names share one validated namespace. Block-internal labels use AZM
+  0.3's `_name` owner-local syntax and bodies are emitted verbatim under
+  stable `Glim_<Block>:` entry labels; no label rewriting occurs.
 
 - **Cards are sections, not blocks (2026-07-06).** `card <Name>` starts
   a section that runs to the next `card` line or end of file — no
@@ -387,7 +359,7 @@ tile-decl       ::= "tile" identifier "color" color-name
   terminates a `begin` body ("end of assembly"). The language stays
   nesting-free (rule 6) even with cards.
 
-Open syntax questions to settle before implementing:
+One syntax question remains deliberately open:
 
 - **`->` vs a word.** `bind key KEY_2 rising fires Up` reads aloud
   better; `->` is more scannable and matches the dataflow diagrams.

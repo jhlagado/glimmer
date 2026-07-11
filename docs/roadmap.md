@@ -1,511 +1,143 @@
 # Glimmer Roadmap
 
-Working document, 2026-07-06. Complements the design spec in
-[glimmer.md](glimmer.md).
+Current as of 2026-07-11. Detailed release history lives in
+[CHANGELOG.md](../CHANGELOG.md); completed implementation plans remain in
+[`docs/plans/`](plans/) as design records.
 
-## The contract
+## Contract
 
 Glimmer's essential contract is:
 
-```
-.glim file in  →  generated .asm (AZM) file out
-```
-
-Everything else — assembling, debug maps, emulation — belongs to AZM and
-Debug80. Glimmer does not need to invoke AZM to be useful: the user (or a
-build task, or Debug80 itself) runs `azm counter.main.asm` and gets `.hex`,
-`.bin`, and a `.d8.json` Debug80 map. Keeping the generated AZM as the
-canonical interface also serves the transparency principle: the user can
-always read what Glimmer wrote.
-
-Invoking AZM from Glimmer is a _convenience_, not a requirement, and
-`glimmer build` (landed 2026-07-09) provides it: glim → annotated asm →
-`.hex`/`.bin`/`.d8.json` in one command, with the debug map rewritten so
-block-body lines step in `.glim` source. The plain `glimmer` command still
-stops at generated AZM, which remains the canonical interface.
-
-The long-term exception: source-level debugging of `.glim` files in Debug80
-will eventually need a Glimmer-level map (glim line ↔ generated asm line),
-analogous to how `.d8.json` maps asm lines to addresses. That is the point
-where Glimmer becomes "a format used by Debug80" rather than a standalone
-preprocessor. See "Debug80 integration and source mapping" below.
-
-## The corpus
-
-`corpus/` holds real TEC-1G programs copied into this repo as reference
-source and adaptation material: `corpus/tetro/` (Tetro + Pacmo) and
-`corpus/tms9918/` (three VDP demos). They are pressure tests, not first
-publish blockers.
-
-The first pass of that experiment exists in `sketches/`: aspirational
-`.glim` drafts of Tetro (`sketches/tetro.glim`) and an interactive TMS9918
-program (`sketches/sprite-chase.glim`). They define future shape. First
-publish only needs the smaller proof already in `examples/`.
-
-## What v0 does today
-
-A single-file `.glim` program compiles to one AZM file:
-
-- `program`, `state` (byte/word scalars, byte arrays, initial value,
-  `changed`), `pulse`
-- `bind key <KEY> rising -> <Pulse>`
-- blocks — `compute` (derive), `effect` (logic), `render` — with `on`
-  triggers, `updates`, and a verbatim Z80 body with block-local `_label`
-  namespacing
-- four change-flag banks (max 32 cells), generated polling/dispatch/cleanup glue
-- placeholder `API_*` equates; CounterToy assembles end to end
-
-The compiler pipeline shape (parse → validate → generate, diagnostics with
-line numbers, round-trip assembly test) is the part that is "complete". The
-_model_ is deliberately narrow.
-
-## What Tetro and Pacmo teach us
-
-The two real TEC-1G games (~/projects/tetro) are the target profile, and
-they reshape the runtime model in one important way:
-
-**On this hardware, the CPU is the display controller.** There are no
-interrupts. The main loop is:
-
-```asm
-MainLoop:
-    CALL ScanFrame      ; scan all 8 matrix rows with fixed dwell;
-                        ; sound + 7-seg HUD serviced once per row tick
-    CALL LogicTick      ; ALL game work runs while the matrix is blank
-    JR   MainLoop
+```text
+.glim source -> readable generated AZM -> HEX / BIN / Debug80 map
 ```
 
-The spec's `poll → effects → flush` loop assumed a display you write to
-(as the TMS9918 will be). The 8x8 RGB matrix is instead a display you
-_are_: fixed row dwell keeps brightness uniform, and the entire game
-budget is the inter-frame blanking period. Glimmer's "the runtime owns the
-loop" principle fits perfectly — but the generated loop for this profile
-must be scan-driven, with effect phases running inside the blank window.
+Glimmer owns the structured source, reactive runtime generation, profile
+selection, and `.glim` source attribution. AZM owns assembly, layout types,
+operations, register contracts, and machine-code artifacts. Debug80 owns
+emulation and the debugging experience.
 
-Other concrete facts to build against:
+The generated AZM file is a canonical, inspectable interface rather than a
+hidden intermediate. `glimmer build` runs the complete chain for convenience,
+and `buildGlimmerProgram` exposes the same workflow in process to Debug80.
 
-- **Input** is MON-3 `_scanKeys` (`LD C,16 / RST 0x10`): Z = key held,
-  Carry = new press. So `rising` bindings map directly onto the carry flag
-  (no PrevKeys shadow needed), and real games also need a `held` binding
-  kind with an autorepeat period (Tetro's MoveCooldown/MovePeriod/
-  DropPeriod pattern) plus edge-only actions (rotation).
-- **System calls**: MON-3 exposes ~58 RST 10H APIs (keys, LCD, 7-seg,
-  beep/playNote/playTune, random, joystick, serial). These are the real
-  replacements for the v0 `API_*` placeholder equates.
-- **Hardware ports** (shared/constants.asm): digits 0x01, segs 0x02, LCD
-  inst 0x04 / data 0x84, matrix row 0x05, red 0x06, green 0xF8, blue 0xF9;
-  speaker on bit 7 of the digit latch.
-- **Framebuffer contract**: front + back buffers, 8 rows x 4 bytes
-  (R, G, B, aux), draw primitives (`FbSetCell`, `FbOrRow`, `MxMask`).
-- **Resources in practice**: piece rotation bitmaps, colour tables, LCD
-  script tables, tune tables — all `.db`/`.dw` ROM data. This is what the
-  spec's resource concept compiles to.
-- **Modes**: splash / running / paused / line-clear / game-over, dispatched
-  from flags each frame — the spec's card/screen concept in the wild.
-- **Memory layout**: user code at 0x4000 under MON-3; debug80.json targets
-  with tec1g platform, bundled MON-3 ROM, appStart 16384.
+## Current release line
 
-## First publish line
+Version 0.5.3 is the AZM 0.3 and native-Debug80 line:
 
-First publish means Glimmer is useful as a small, Debug80-friendly Z80
-game framework. It does not mean Glimmer can express every future game or
-every platform profile. The line is:
+- generated files declare `.contracts` policy and `.routine` boundaries;
+- curated profile routines carry explicit register interfaces while user
+  blocks and routines are inferred from their bodies;
+- `glimmer build` performs one AZM assembly pass and rewrites the resulting
+  map so user-body segments point back to `.glim` source;
+- Debug80 recognises `.glim`, builds it through the Glimmer API, and supports
+  breakpoints and stepping in the original file;
+- the installed npm command works through package-manager bin symlinks.
 
-- the CLI is stable enough to generate AZM from `.glim`
-- generated AZM assembles and passes the AZM register-contract workflow
-- examples are small, readable, and Debug80-ready
-- documentation explains the implemented language, not the whole dream
-- the package builds cleanly and can be installed
+The first published line is complete. New work is selected by pressure from
+real programs and additional platforms, not by an attempt to hide Z80 behind
+an ever-larger language.
 
-Anything that does not serve that line moves after first publish.
+## Shipped language
 
-## Delivered core
+- scalar byte and word state, byte arrays, and AZM layout-typed state;
+- pulses, oscillator and one-shot timers, ramps, and `FrameCount`;
+- rising, held-autorepeat, and any-key bindings on TEC-1G/MON-3;
+- `compute`, `effect`, and `render` blocks with explicit `on` and `updates`;
+- callable `routine` blocks and byte-for-byte verbatim AZM bodies;
+- cards as exclusive screens or modes, edge-triggered `enter` blocks, and
+  frame-boundary `goto` navigation;
+- multi-file programs through `part` and hand-written AZM modules through
+  `.import`;
+- sound cues, curves, matrix shapes and rotations, LCD text, TMS9918 sprites,
+  tiles, and generated AZM `op` helpers;
+- four change-flag banks with exactly-once same-frame or next-frame delivery.
 
-**TEC-1G platform profile. ✅ Landed 2026-07-06.**
-`platform tec1g-mon3` + `display matrix8x8` generate MON-3/port equates,
-`_scanKeys` rising-edge polling, a scan-driven loop (whole frame with
-fixed dwell, effects in the blank window), a 32-byte framebuffer, and a
-minimal profile library (ScanFrame, MxMask, FbPlot, FbClear). The repo
-debug80.json carries a `dot` target. Example: `examples/dot.glim` — the
-deliberately bare-bones input-to-pixel program (keypad-moved dot,
-edge-clamped). The generic profile remains the default.
+## Shipped profiles
 
-**Change-flag rollover. ✅ Landed 2026-07-07.**
-v0 clears all change flags at frame end, so a backward dependency —
-logic updating a cell that a derive effect (or an earlier-declared
-effect in the same phase) triggers on — is dropped, not deferred: the
-earlier effect never fires. Two-line reproduction: logic `updates
-Score`, `effect DifficultyCurve derive / on Score` — DifficultyCurve
-never runs. Fix is the spec's CurrentDirty/NextDirty split: cleanup
-rolls undispatched flags into the next frame instead of clearing them.
-With rollover, backward edges work with a one-frame delay, and cycles
-become bounded cross-frame feedback (one step per frame) rather than
-lost updates. Stability guarantees that hold either way: every effect
-runs at most once per frame; the frame is a single forward pass; frame
-cost is bounded by effect count — no within-frame circularity is
-possible by construction.
+### TEC-1G matrix8x8
 
-**Lint backlog. ✅ Closed 2026-07-10.** Plain-label collisions resolved
-upstream (AZM 0.2.17 routine-scoped labels; Glimmer's `_label` renaming
-removed, bodies byte-for-byte verbatim). The "body writes a cell not
-listed in `updates`" check now ships as a warning — diagnostics carry a
-severity, warnings never fail the build, and direct `ld (Cell),` stores
-are scanned (pointer-register writes are invisible to a text scan, by
-design).
+The CPU scans the display. `ScanFrame` services all eight rows, sound, and the
+seven-segment HUD; reactive work runs in the inter-frame blanking window.
+MON-3 supplies keypad polling, LCD calls, and random numbers.
 
-**Matrix runtime. ✅ Landed 2026-07-07.**
-`held period N` bindings (first press fires, then autorepeats;
-tec1g-mon3); the timing widget family — `timer` (oscillator: writable
-period cell + hidden countdown), `timer ... once` (one-shot countdown,
-rearmed by writing), `ramp` (progress counter: steps each frame, cell
-marked changed each step, completion pulse, idles at terminal,
-retriggered by writing); built-in `FrameCount` (flag bit allocated only
-when used); change-flag rollover (Raised0/Next0: raises whose consumers
-are all later deliver same-frame at phase boundaries, raises any of
-whose consumers already ran defer whole to next frame — exactly-once,
-declaration order never semantic); per-row sound + seven-segment HUD
-service in the scan loop with SndStart/HudWriteU16/HudBlankDig library
-routines. Example: `examples/slide.glim` — press GO, a dot slides
-across over 64 frames driven by a ramp through a compute block, a timer
-blinks it, arrival beeps and bumps a HUD counter; `examples/dot.glim`
-movement is now held-autorepeat. Both pass `--rc strict
---reg-profile mon3`.
+### TEC-1G TMS9918
 
-**Resources and scale. ✅ Landed 2026-07-08.** (Work plan:
-[plans/v0.3.md](plans/v0.3.md).) Declarative resources compiled to data
-tables. Sound cues landed first: `sound Name len N div N` emits a
-non-blocking `Snd_<Name>` wrapper over the matrix scan service for
-low-frequency beeps and clicks. Curves landed next: `curve Name ease_out
-steps N from A to B` emits page-aligned byte tables computed at build
-time and driven by v0.2 ramps. Shapes are now implemented for the
-matrix profile: `shape Name color green` emits row-bitmaps and
-`ShapeDraw` renders them at B,C with no clipping. Byte array state has
-also landed: `state Trail : byte[8]` emits `.ds 8, 0` and carries one
-change flag for the whole array, demonstrated by `examples/trail.glim`.
-Multiple change-flag bytes are now in place too: category order (states,
-pulses, ramps, then `FrameCount`) fills up to four banks
-(`Changed0`..`Changed3` plus matching `Raised` and `Next` banks), for 32
-flag-carrying cells. Landed examples are `counter.glim`, `dot.glim`,
-`slide.glim`, and `trail.glim`.
+The VDP renders independently. The loop waits for vertical blank, commits dirty
+name-table rows and sprite attributes from shadows, polls input, and runs the
+reactive phases. Sprite and tile declarations generate their pattern upload and
+Graphics I colour groups.
 
-**Project structure, first slice. ✅ Landed 2026-07-08**
-(plan: [plans/v0.4.md](plans/v0.4.md)): `part "file.glim"` merges
-declarations into one program/namespace with file-tagged diagnostics
-(`examples/trail.glim` + `trail-blocks.glim`); `import "module.asm"`
-brings AZM modules in, emitted outside every execution path;
-`glimmer --deps` prints the writers/readers report per cell. Deferred
-within the milestone: generated output as `.import` modules (file-layout
-decision pending), per-block assemble/check, `.glim` libraries.
+### Generic
 
-**Snake. ✅ Landed 2026-07-08, not a publish blocker.**
-`examples/snake.glim` + `snake-rules.glim` (a part) + `snake-lib.asm`
-(an imported hand-written module) is the first complete game in
-Glimmer: ring-buffer body in array state, wrap-around movement, food,
-growth, speedup via the writable timer period, eat/die sounds, score on
-the HUD, GO to start and restart. Written with nothing beyond shipped
-features — the v0.3 acceptance claim, now validated. Findings feed the
-next milestones:
+The generic profile emits placeholder APIs and an audit contract policy. It is
+useful for tests and for inspecting the platform-neutral runtime shape, not as a
+finished hardware target.
 
-- **Cards evidence (v0.6):** the `Alive` guard opens StepSnake and
-  StartGame — exactly the flag-dispatch boilerplate cards exist to
-  absorb.
-- **Structured-data evidence (v0.5):** the `Body + index` address
-  arithmetic repeats five times across the game and its library; AZM
-  layout types would name it once.
-- **AZM profile gap:** ~~the mon3 profile did not model call 49~~ —
-  closed 2026-07-09: AZM 0.2.17 models `_random` (out A, destroys B),
-  the generator emits `ApiRandom .equ 49`, and snake's food placement
-  uses the real call.
-- The contract pipeline caught two genuine bugs while writing snake: a
-  `jr` past the ±128 range in the long step block, and the
-  read-after-RST liveness issue above. The checked build earns its
-  keep.
+## Acceptance programs
 
-## Remaining before first publish
+- `examples/dot.glim`: smallest matrix input-to-pixel program;
+- `examples/slide.glim`: timers, ramps, curves, sound, shapes, and HUD;
+- `examples/trail.glim`: array state and `part` composition;
+- `examples/snake.glim`: first complete multi-file game;
+- `examples/tetro.glim`: matrix headline game, cards, rotations, LCD, scoring,
+  line-clear flash, pause, and game-over flow;
+- `examples/sprite-chase.glim`: second-display acceptance game with declarative
+  sprites, tiles, and generated VDP operations.
 
-These are the items that still matter before drawing the line:
+All examples are snapshot-covered and assemble under their applicable AZM
+contract policy. Tetro and sprite-chase are native targets in `debug80.json`;
+`tetro-glim` is the repository default.
 
-1. **Clean build and package.** `npm run build`, `npm run typecheck`,
-   `npm run lint`, and the test suite pass; package metadata and exported
-   files are correct.
-2. **Debug80-ready workflow.** Generated `<name>.main.asm`, `.hex`, `.bin`,
-   and `.d8.json` examples are current. `debug80.json` points at useful
-   targets. The first-publish docs explain how to build and run through
-   Debug80.
-3. **D8/Glim source mapping, first cut. ✅ Landed 2026-07-09.**
-   `glimmer build <entry.glim>` generates, injects contracts, assembles
-   (`.hex`/`.bin`/`.d8.json`), and rewrites the map (Option A): segments
-   inside block bodies are re-attributed to their `.glim` file (entry or
-   part) using the label-anchored contract — `@Glim_<Name>:` plus
-   byte-for-byte verbatim bodies — while generated glue stays attributed
-   to the generated `.asm`. Assembly originally ran as a second AZM
-   pass over the annotated file so map lines matched the file on disk
-   (a single `--contracts` pass produced a map offset by the injected
-   `;!` lines). Resolved upstream by AZM 0.3: contracts are declared
-   in-source with `.routine` and nothing rewrites the file, so the
-   build is a single pass (2026-07-11).
-4. **Docs winnow.** The manual and roadmap describe the shipped core.
-   TMS9918, Tetro/Pacmo, cards, structured data, libraries, and richer
-   resources move to post-publish tracks.
-5. **Known-quality cleanup.** Fix lint, remove accidental generated or
-   local files from the working tree, and keep only intentional examples.
+## Remaining validation
 
-## The 0.2 release line (2026-07-10)
+Two checks cannot be completed by repository automation:
 
-The publish decision moved: the 0.1 line is complete but stays
-unpublished. Package 0.2.0 is the release worth integrating into
-Debug80 and documenting fully — the language-complete line. It absorbs
-the remaining language milestones below (structured data, cards,
-routines), validated by `tetro.glim` as the acceptance test. Work plan:
-[plans/release-0.2.md](plans/release-0.2.md).
+1. Play Tetro through its full splash, movement, rotation, lock, line-clear,
+   pause, restart, LCD, HUD, and sound paths in Debug80 and on TEC-1G hardware.
+2. Play sprite-chase through input, sprite movement, collision, score tiles,
+   and sustained VDP commit timing in Debug80 and on a TEC-Deck.
 
-**The second display. ✅ Landed 2026-07-10 (release 0.3 phases A-C).**
-The profile seam is extracted (src/profiles/: equates, input and
-display-service storage, data tables, loop skeleton, polling, library
-tail), gated by byte-identical output snapshots for every example.
-`display tms9918` generates the written-to loop — vblank pacing, a real
-commit phase flushing name-table (per-row dirty) and sprite-attribute
-shadows — over a VDP library built from the corpus demo idioms; MON-3
-keypad input is a module shared by both TEC-1G profiles.
-`examples/sprite-chase.glim` graduates from the sketch as the
-acceptance test. Rider: AZM diagnostics inside block/routine bodies are
-re-attributed to `.glim` lines in the build API and CLI — errors now
-land where breakpoints do.
+Findings from those sessions are release maintenance, not new language scope.
+Strict assembly and emulator startup are necessary evidence but are not a
+substitute for behavioural playtesting.
 
-**Tetro. ✅ Landed 2026-07-10, first cut.** `examples/tetro.glim` +
-`tetro-rules.glim` (cards) + `tetro-lib.asm` (piece tables and the
-collision/lock/clear engine, adapted from corpus): pieces fall, move,
-rotate, lock; full rows clear and collapse with corpus scoring; the
-difficulty curve doubles the pace past 2000; splash, pause, and
-game-over cards with GO to start and restart. First-cut
-simplifications: instant line clear (no flash), no LCD messaging, no
-next-piece preview, no game-over key gate. The adaptation immediately
-paid for itself as a pressure test: it exposed that unconditional
-`updates` marking made conditional card transitions and enter blocks
-interact wrongly — fixed by making enter blocks **edge-triggered**
-(GlimPrevCard shadow), which in turn made _conditional navigation_
-(body writes `CurrentCard` under `updates CurrentCard`) a supported
-pattern, answering the sketch's open question about gating pulses.
+## Next language phase
 
-Versioning note: package versions and roadmap milestones are separate
-namespaces now. Milestones go by feature names, not version-shaped
-labels (the old "v0.5"/"v0.6" names are retired); package releases stay
-sequential.
+The strongest next candidate is **source-level routine contract clauses**.
+AZM 0.3.3 verifies explicit `.routine` interfaces against _callers_ and
+against each routine's own body-effect summary (`declaration_contract_mismatch`
+when a body write is preserved or left unmentioned). Glimmer already emits
+reliable boundaries (bare `.routine` for user blocks; curated clauses on
+profile library routines, audited against that body check). What remains is
+a readable `.glim` header syntax that passes explicit `in`, `out`,
+`maybe-out`, `clobbers`, and `preserves` clauses through into the generated
+`.routine` line — without putting non-Z80 semantics inside the body — plus
+negative tests on the Glimmer side.
 
-## Remaining language milestones (in the 0.2 release)
+Profiles may later move monitor interfaces into AZM `.asmi` files when that
+is more useful than the current register profile.
 
-- **Cards and header-level navigation. ✅ Landed 2026-07-10.** `card`
-  section lines; generated `Card` enum + built-in `CurrentCard` cell
-  (first card = start card, changed on frame one); card-gated dispatch;
-  `enter` blocks run once on entry, before the card's other blocks;
-  `goto` in block headers (body optional) folds into `updates
-CurrentCard`, so rollover and the dependency report see the real
-  dataflow.
-- **Structured data via AZM layouts. ✅ Landed 2026-07-10.** `type`
-  declarations compile to AZM Book 0 `.type` records (`type Name = Expr`
-  to `.typealias`); typed state (`state Cursor : Point`,
-  `state Pieces : Piece[7]`) reserves typed `.ds` storage with one
-  change flag per cell, byte-array style. `sizeof`/`offset`/layout casts
-  work in bodies as ordinary AZM. Recursive layouts and unknown type
-  references are parse-time diagnostics.
-- **Routines (sketch P5). ✅ Landed 2026-07-10.** `routine Name`
-  callable helper blocks — no triggers, no dispatch — emitted as public
-  `@Name:` boundaries with AZM-inferred contracts; bodies verbatim and
-  debug-mapped to `.glim` source like block bodies.
+## Later, evidence-driven work
 
-## The 0.3 release line (planned 2026-07-10, restructured same day)
+- **`.glim` libraries:** reusable state, bindings, effects, and resources need
+  a namespace and ownership model beyond `part` merge semantics.
+- **Generated module splitting:** move stable runtime/profile sections into
+  `.import` units only if editor and debugging experience improves.
+- **Per-block diagnostics:** editor-time isolated assembly and richer dataflow
+  analysis, while preserving whole-program verification as the authority.
+- **Additional profiles:** joystick input, TMS9918 Graphics II or NMI pacing,
+  sound hardware, and other Z80 systems supported by Debug80.
+- **Larger corpus adaptations:** Pacmo and future games should justify new
+  constructs rather than merely demonstrate existing ones again.
+- **Native source origins:** an AZM `.loc`-style directive could eventually
+  replace Glimmer's map post-processing if the mechanism benefits other source
+  generators too.
 
-0.3 is the second-display line: derisk the profile architecture while
-it is still cheap to change. Phase A extracts the profile seam from
-the generator (byte-identical outputs as the refactor gate), Phase B
-builds the tms9918 profile (vblank-paced loop with a real commit
-phase, VRAM shadows with dirty tracking, VDP library), Phase C
-graduates `sprite-chase.glim` from sketch to acceptance test, and
-diagnostics re-attributed to `.glim` lines ride along. This answers
-the open questions below about loop parameterization and the
-glue/library boundary. The developer-experience items originally
-drafted for 0.3 (contract seeds, P6 resource remainder, Tetro corpus
-parity, P7 closure) move to the 0.4 horizon. Work plan:
-[plans/release-0.3.md](plans/release-0.3.md).
+## Explicitly not goals
 
-## The 0.4 release line (planned 2026-07-11)
-
-0.4 is the resources-and-parity line: the sketches' data declarations
-become real on both profiles — multi-rotation shapes (Tetro's pieces),
-sprite/tile resources with generated `sprite_at`/`tile_at` AZM ops and
-VRAM upload, text resources with the LCD slice, `bind key any` — plus
-contract seeds passed through from block/routine headers, and both
-flagship games brought to corpus parity so only irreducible engine
-code stays hand-written. P7 word semantics is documented and closed.
-Work plan: [plans/release-0.4.md](plans/release-0.4.md).
-
-## After the 0.4 release
-
-These are important, but they are not blockers:
-
-- **Better `.glim` debug maps.** The first cut landed with
-  `glimmer build` (see above). Remaining depth: a `.glim` TextMate
-  grammar in Debug80, native `.glim` targets in debug80.json, and the
-  AZM `.loc`-style source-origin directive (Option B) once the UX has
-  proven itself.
-- **Generated-output module splitting.** Move stable generated sections
-  toward AZM `.import` modules when file layout and debugging tradeoffs
-  are clear.
-- **Per-block assemble/check and dataflow diagnostics.** Useful editor
-  features, not first-publish requirements.
-- **`.glim` libraries.** Reusable pulse/effect/resource kits need a
-  namespace story beyond `part`.
-- **TMS9918 profile and larger games.** The VDP profile, richer sprite
-  and tile resources, and Tetro/Pacmo-scale game profiles are
-  post-publish expansion work.
-
-**Register contracts.** AZM formalizes register interfaces (since 0.3:
-a `.routine` directive with in/out/maybe-out/clobbers/preserves clauses
-before the entry label, checked under per-file `.contracts` policy) and
-proves callers against them — catching clobbered-loop-counter bugs at
-assemble time. Glimmer leans on this: the generated file declares
-`.contracts strict` (TEC-1G profiles), the curated library carries
-explicit clauses, and user blocks and routines get bare `.routine`
-boundaries whose contracts AZM infers from the body — Glimmer supplies
-boundaries, AZM supplies truth. Inferred output candidates are accepted
-for user routines through the compile API. Output passes strict
-checking under the mon3 register profile (test-enforced). Next steps:
-pass contract clauses on `routine` blocks through from `.glim` source;
-let profiles ship `.asmi` interfaces for monitor APIs. The payoff for Glimmer users:
-blocks call library and monitor routines constantly, and contracts turn
-register collisions — the classic Z80 bug — into build-time errors.
-
-## Post-publish platform note: TMS9918
-
-The TEC-Deck video card puts a TMS9918A on the TEC-1G at data port $BE /
-control port $BF, and Debug80 emulates it fully
-(src/platforms/tec1g/tms9918.ts): 16 KiB VRAM, Graphics I, 256x192 output,
-sprites (16x16 + magnify), status register with the vblank interrupt flag,
-PAL/NTSC frame timing (~80k/~67k cycles per frame), and NMI delivery when
-register 1 interrupt-enable is set. Reference programs:
-~/projects/debug80-tec1g-mon3/src/tms9918-{sanity,video,demo}.main.asm.
-
-Unlike the LED matrix, this is a _written-to_ display — the spec's original
-`poll → logic → render → commit` loop fits directly. The demos establish
-the canonical idioms Glimmer would generate or ship as profile library
-code:
-
-- register init from an 8-byte table (value, then index|0x80, via $BF)
-- `SetWriteAddress` (address low, then high|0x40) + streamed `OUT ($BE)`
-  block copies and fills
-- conventional VRAM layout: pattern $0000, name $0800, sprite attributes
-  $1B00, colour $2000, sprite patterns $3800
-- tile patterns, colour tables, and sprite patterns as ROM `.db` tables —
-  exactly what Glimmer resource declarations compile to
-- frame pacing via delay or the status-register vblank flag (reading $BF
-  clears it); the maxed-out demo also shows sprite flicker balancing by
-  rotating attribute-table emission order each frame
-
-Two Glimmer-shaped observations. First, the name table is a 32x24 grid of
-tiles — the same 32x24 the spec uses to motivate one-screen blocks;
-dirty-region display updates map naturally onto name-table cell writes, so
-the commit phase can flush only dirty cells. Second, the matrix profile
-(v0.2) and the TMS9918 profile differ almost entirely in the generated
-loop skeleton and commit phase, which is strong evidence for the
-profile-parameterized loop in the open questions below.
-
-## Debug80 integration and source mapping
-
-The goal: set a breakpoint in a `.glim` file, press F5, and step through
-Glimmer source. Three pieces make that work, in increasing order of
-coupling.
-
-**1. `.glim` as a recognized language (no Glimmer/AZM coupling).**
-Debug80 already contributes file associations, TextMate grammars, and
-language configuration for `.asm`/`.z80`/`.asmi`. A `.glim` grammar is the
-same mechanism, and TextMate grammars support embedded languages — so the
-Glimmer grammar highlights the declarative statements itself and delegates
-everything between `begin` and `end` to the existing `z80-asm` grammar.
-This piece is independent of debugging and can land early.
-
-**2. The D8 map already supports multi-file attribution.**
-The `.d8.json` format (schemas/d8-debug-map.schema.json in debug80,
-written by AZM) maps address ranges to `{file, line, column, kind,
-confidence}` — and `files` is a _dictionary of source files_, because
-`.include`/`.import` already require attributing addresses to the file
-that contributed them. Debug80 resolves breakpoints and stepping through
-that dictionary. So glim-level debugging does not need a new format:
-it needs address segments attributed to `counter.glim` lines instead of
-(or alongside) generated `counter.main.asm` lines.
-
-**3. Producing glim-attributed maps — three options.**
-
-- **Option A — Glimmer composes. ✅ Implemented 2026-07-09 as
-  `glimmer build`** (`src/build.ts`). Compiles `.glim` → `.asm`, runs AZM
-  (a single AZM pass for `.hex`/`.bin`/`.d8.json`, contract checking
-  riding along since AZM 0.3), then rewrites the map: segments inside user
-  blocks are re-attributed to the `.glim` file (entry or part), while
-  generated glue stays attributed to the `.asm`. The anchor is Option D's
-  contract — `Glim_<Name>:` labels plus byte-for-byte verbatim bodies —
-  with each body text-verified before mapping, so a drifted block is
-  skipped with a warning rather than mapped wrongly. No changes to AZM or
-  Debug80's map reader; stepping lands in `.glim` for user code and drops
-  into readable generated AZM for glue — the transparency principle
-  working as intended.
-- **Option B — AZM gains a source-origin directive (durable mechanism).**
-  A `#line`-style directive (e.g. `.loc "tetro.glim" 42`) in generated
-  source, honoured by AZM's map writer, would let AZM emit correctly
-  attributed maps natively. Cleaner than post-processing, keeps one map
-  producer, and generalizes to any future source-generating tool, not
-  just Glimmer. This is an AZM feature proposal to raise when Option A
-  has proven the UX.
-- **Option C — sidecar map composed by Debug80.** A separate
-  `.glim.map.json` that Debug80 merges at load time. Most moving parts,
-  least aligned with the existing architecture; not recommended.
-- **Option D — label-anchored mapping (no new artifacts).** The generated
-  naming convention is itself debug information. Every effect's code
-  begins at `Glim_<Effect>:`, the `.d8.json` map records symbols with
-  addresses, and block bodies are copied into the generated file
-  byte-for-byte verbatim (AZM's `_name` labels are local to the block's
-  entry label, so no renaming happens at all). So a tool holding the `.glim`, the
-  generated `.asm`, and the `.d8.json` can reconstruct the full mapping
-  with zero extra metadata: the symbol gives the block's start, and body
-  line k after the label corresponds to body line k after `begin`.
-  Block-level mapping ("which effect is the PC in?") needs only the
-  `.d8.json` and the convention. This depends on two promises the
-  generator now makes — stable `Glim_*` naming and verbatim bodies —
-  which should be treated as a contract once anything relies on them.
-
-The build-orchestration question ("how does Debug80 know to run Glimmer?")
-starts simple: a debug80.json target's `sourceFile` points at the
-generated `.asm`, and Glimmer runs as a pre-build step or watch task.
-Native `.glim` targets are real (Debug80 side landed 2026-07-11):
-Debug80 bundles `@jhlagado/glimmer`, a GlimmerBackend builds `.glim`
-sourceFiles through the in-process API (backend inferred from the
-extension or `"assembler": "glimmer"`), the `glim` language ships
-syntax highlighting with embedded Z80 in bodies plus breakpoint
-support, and this repo's debug80.json carries native `tetro-glim` and
-`sprite-chase-glim` targets (now the default). The API that made it a
-sibling of AzmBackend (2026-07-10):
-`buildGlimmerProgram(entryPath, options)` on the `@jhlagado/glimmer/build`
-subpath runs the whole chain in process with AZM-shaped diagnostics and
-returns artifact paths — the exact mirror of the `@jhlagado/azm/compile`
-API Debug80's AzmBackend already consumes, so a GlimmerBackend is a
-sibling implementation selected by the `.glim` extension. Both
-prerequisites landed with it: Debug80's AZM is ^0.2.17 (zero test
-fallout) and the `glim` language contribution includes the
-`breakpoints` list.
-
-## Open questions — answered by the second display (2026-07-10)
-
-- _How does a profile parameterize the generated loop?_ One loop
-  skeleton with profile-supplied hooks, settled by building both
-  displays on it: the core emits `Start`/`MainLoop`/phase calls/
-  `GlimEndFrame`, and the profile supplies init, the frame start (pacing
-  policy + commit + the poll call), and the frame end. The matrix's
-  scan-then-work and the VDP's wait-commit-poll both fit without
-  special cases; `commit` exists only where the profile emits it.
-- _Where is the glue/library boundary?_ Settled in practice: generated
-  glue is everything derived from the program (dispatch, wrappers,
-  flags, `GlimCommit`'s dirty loop); the profile library is everything a
-  program merely calls (`ScanFrame`, `FbPlot`, `VdpWriteBlock`,
-  `SpriteSet`). Both are emitted into the one visible file today.
-- _When do profile services move into AZM `.import` libraries?_ Still
-  open, deliberately — the emitted-library approach keeps the single
-  readable file, and module splitting stays a post-0.3 item to be
-  decided with real editor/debugging experience.
+- replacing AZM with a second assembler or macro language;
+- hiding generated assembly;
+- conditional navigation syntax inside Z80 bodies;
+- blocking music as the default matrix sound model;
+- adding abstractions without a game, tool, or platform that needs them.

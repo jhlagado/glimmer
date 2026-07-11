@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -455,6 +456,20 @@ describe('CLI pipeline (generate + AZM contract check)', () => {
     // Each block wrapper is a declared routine boundary; AZM infers
     // its contract from the body under .contracts strict.
     expect(out).toMatch(/\.routine\nGlim_MoveUp:/);
+  });
+
+  // Regression: npm installs expose the CLI through a .bin symlink, so
+  // argv[1] is the symlink while import.meta.url is the resolved real
+  // file. The entry guard must compare after realpath resolution, or
+  // `npx glimmer` exits 0 having done nothing.
+  it('runs when invoked through a bin-style symlink', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'glimmer-bin-'));
+    const link = path.join(dir, 'glimmer');
+    symlinkSync(path.join(import.meta.dirname, '../src/cli.ts'), link);
+    const stdout = execFileSync(process.execPath, ['--import', 'tsx', link, '--help'], {
+      encoding: 'utf8',
+    });
+    expect(stdout).toContain('Usage: glimmer');
   });
 });
 

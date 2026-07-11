@@ -7,7 +7,9 @@ real on both profiles, the first Glimmer-emitted AZM `op`s appear, and
 the two flagship games reach corpus parity — so that what remains
 hand-written in any example is genuinely irreducible engine code. It is
 also the developer-experience line displaced from the original 0.3
-draft: contract seeds land here.
+draft: source-declared register contracts were meant to land here
+(item 1); that ask moved to AZM 0.3's `.routine` model and remains
+gated on body-vs-declaration verification — see Status.
 
 Runs alongside John's Debug80 integration phase and the pending
 playtests of Tetro (matrix) and sprite-chase (VDP); playtest findings
@@ -18,37 +20,37 @@ fold into this release's scope as they arrive.
 0.4 is done when: a piece, a sprite, a tile, and an LCD message are all
 declarations, not hand-written tables; `sprite_at` and `lcd_row` exist
 as visible AZM `op`s in the generated file (the P6/P8 ground rule
-exercised: one macro system, owned by AZM); Tetro matches the corpus
-game feature-for-feature; and a routine can declare its register
-interface and have AZM verify it.
+exercised: one macro system, owned by AZM); and Tetro matches the corpus
+game feature-for-feature. Source-declared register interfaces with
+body-checked verification were part of the original draft and moved out
+— see item 1.
 
-## 1. Contract seeds from source — BLOCKED on an AZM design decision
+## 1. Contract seeds from source — superseded; AZM body check still open
 
-Investigated 2026-07-11; pass-through alone would be worse than
-nothing. Empirically (AZM 0.2.17):
+Originally drafted against AZM 0.2.17's `;!` smart comments. AZM 0.3
+replaced that surface with `.routine` directives; Glimmer 0.5 emits
+those boundaries and no longer speaks `;!`. The _intent_ of this item
+— source-declared register interfaces that AZM will refuse when they
+lie about the body — survives as the roadmap's next language phase
+(**source-level routine contract clauses**).
+
+What the 2026-07-11 investigation found (still true under AZM 0.3):
 
 - A deliberately **wrong** declared contract (`preserves B` on a body
-  that destroys B) passes `--rc error` _and_ `--rc strict` silently:
-  declared contracts replace inference in `buildSummaries` and are
-  trusted — callers are proven against them, but a routine's body is
-  never verified against its own declaration.
-- The `--contracts` annotation pass (which Glimmer always runs)
-  **overwrites** the seed with the inferred contract, so a seed would
-  not even survive into the annotated file.
-- AZM's inference is usage-informed (a clobbered register a caller
-  never reads may be omitted from the annotation), so verification
-  needs the raw body-effect summary (`RoutineSummary.mayWrite` /
-  `preserved`), not the annotate text.
+  that destroys B) is trusted: callers are proven against the
+  declaration, but the body is never checked against it.
+- Annotation used to overwrite `;!` seeds wholesale. Under 0.3 it
+  rewrites the `.routine` line from the summary **merged with** the
+  declared clauses — so (b) below is largely addressed. The hard gap
+  remains (a).
 
-**AZM proposal for John** (two parts): (a) verify a declared `;!`
-contract against the routine's own body-effect summary — error when
-the body may write a register the declaration preserves or omits
-(treating unmentioned-as-preserved, matching how callers already read
-declarations); (b) make annotation respect a declared contract that
-verifies, instead of overwriting it. With those in an AZM release,
-the Glimmer side is a small pass-through (header `;!` lines emitted
-above the `@` label; the sketch syntax) and lands in the next Glimmer
-release. Until then this item is parked, not dropped.
+**Outstanding AZM ask (resolved in AZM 0.3.3):** verify a declared
+`.routine` contract against the routine's own body-effect summary, and
+error when the body may write a register the declaration preserves or
+leaves unmentioned (`declaration_contract_mismatch`). Glimmer 0.5.2
+depends on that release and corrects profile-library clauses that the
+new check exposed. Remaining Glimmer work: a readable `.glim` header
+syntax that emits `.routine in … out … clobbers …` and negative tests.
 
 ## 2. Multi-rotation shapes (matrix) — ✅ landed 2026-07-11
 
@@ -132,26 +134,23 @@ splitting, per-block assemble/check, further platforms/display modes
 
 ## Coordination tracks (not in this package)
 
-- **Debug80**: John's integration phase (AZM bump, GlimmerBackend,
-  `.glim` grammar + breakpoints contribution). Item 1's seeds surface
-  there as verified interfaces in hovers/contract reports.
-- **AZM**: the declared-contract verification pair from item 1 (verify
-  seeds against the body-effect summary; annotation respects verified
-  seeds) is now the top ask, ahead of the post-injection map/line-offset
-  fix and the `.loc` source-origin directive. If op expansion interacts
-  poorly with the d8 map (ops expand inline), that becomes an AZM
-  finding from item 3.
+- **Debug80**: native `.glim` builds and breakpoints landed on the 0.5
+  line; playtests remain the behavioural check.
+- **AZM**: body-vs-declaration verification for explicit `.routine`
+  clauses landed in 0.3.3 (`declaration_contract_mismatch`). Secondary:
+  `.loc` source-origin directive if other generators need it.
 
 ## Order
 
-~~Contract seeds~~ (parked on AZM) → multi-rotation shapes → Tetro data-section shrink →
+~~Contract seeds~~ (AZM body check in 0.3.3; Glimmer syntax still open) → multi-rotation shapes → Tetro data-section shrink →
 sprite/tile resources + ops → sprite-chase shrink → text/LCD + any-key
 → Tetro full parity → P7 closure → polish (CHANGELOG, version 0.4.0,
 tag). Resources before parity so the games consume declarations, not
-the other way around; seeds first because they immediately harden every
-routine the resource work touches.
+the other way around; seeds were first on paper because they harden
+every routine the resource work touches — in practice AZM 0.3's
+caller-side `.routine` model landed first, body checking in 0.3.3.
 
-## Status — 2026-07-11: complete except the parked seeds
+## Status — 2026-07-11: 0.4 complete; item 1 reframed
 
 Items 2–7 landed in one arc: multi-rotation shapes (Tetro's pieces are
 declarations; the generated tables are the corpus data byte-for-byte),
@@ -161,9 +160,10 @@ with the LCD slice and lcd_row, bind key any, Tetro at corpus parity
 (flash via ClearMask + an idle-start once timer, LCD messages, NEXT
 preview via a text resource + charToLcd, the gated any-key restart
 using conditional navigation), and P7 closed as documented-and-narrow.
-Item 1 (contract seeds) stays parked on the AZM verification proposal.
+Item 1's `;!` seed design is obsolete after AZM 0.3; body-vs-declaration
+verification landed in AZM 0.3.3 and is consumed by Glimmer 0.5.2. The
+remaining work is Glimmer source-level contract-clause syntax (roadmap).
 Findings this arc: once timers may start at 0 (idle until armed —
-validation relaxed); AZM's annotation also injects '; expects' notes at
-call sites inside bodies, so the map/diagnostic line-matching became
-per-line and annotation-tolerant. Remaining before John calls the
-release: playtests (now three games) and the editorial docs pass.
+validation relaxed); map/diagnostic line-matching became per-line and
+annotation-tolerant. Playtests of Tetro and sprite-chase remain
+behavioural acceptance, not language scope.

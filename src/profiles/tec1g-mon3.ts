@@ -84,7 +84,7 @@ function emitMatrixLibrary(
   emit('; Scan all 8 rows with fixed dwell, then blank the matrix so');
   emit('; block work never changes visible row brightness. Sound and the');
   emit('; seven-segment HUD are serviced once per row (8 ticks per frame).');
-  emitRoutine(emit, 'ScanFrame', 'clobbers A,BC,DE,HL');
+  emitRoutine(emit, 'ScanFrame', 'clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry');
   op('ld      hl,Framebuffer');
   op('ld      c,%00000001          ; row select mask');
   emit('_row:');
@@ -118,7 +118,7 @@ function emitMatrixLibrary(
   op('ret');
   emit();
   emit('; Convert x (0-7, 0 = leftmost) to the matrix bit convention.');
-  emitRoutine(emit, 'MxMask', 'in A out A clobbers B');
+  emitRoutine(emit, 'MxMask', 'in A out A clobbers B,carry,zero,sign,parity,halfCarry');
   op('or      a');
   op('ld      b,a');
   op('ld      a,%10000000');
@@ -130,7 +130,7 @@ function emitMatrixLibrary(
   emit();
   emit('; Set one pixel. B = x (0-7), C = y (0-7), A = colour bits');
   emit('; (COLOR_RED/GREEN/BLUE, OR-combined). ORs into the framebuffer.');
-  emitRoutine(emit, 'FbPlot', 'in A,B,C clobbers A,B,DE,HL');
+  emitRoutine(emit, 'FbPlot', 'in A,B,C clobbers A,B,DE,HL,carry,zero,sign,parity,halfCarry');
   op('ld      d,a                  ; D = colour bits');
   op('ld      a,c');
   op('add     a,a');
@@ -170,7 +170,11 @@ function emitMatrixLibrary(
   if (hasShapes) {
     emit('; Draw a shape resource. HL = Shape_<Name>, B = x, C = y.');
     emit('; No clipping: keep the whole shape inside the 8x8 matrix.');
-    emitRoutine(emit, 'ShapeDraw', 'in B,C,HL clobbers A,BC,DE,HL');
+    emitRoutine(
+      emit,
+      'ShapeDraw',
+      'in B,C,HL clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry',
+    );
     op('ld      (ShapePtr),hl');
     op('ld      a,b');
     op('ld      (ShapeBaseX),a');
@@ -238,7 +242,7 @@ function emitMatrixLibrary(
     emit();
   }
   emit('; Clear the whole framebuffer.');
-  emitRoutine(emit, 'FbClear', 'clobbers A,B,HL');
+  emitRoutine(emit, 'FbClear', 'clobbers A,B,HL,carry,zero,sign,parity,halfCarry');
   op('ld      hl,Framebuffer');
   op('ld      b,32');
   op('xor     a');
@@ -250,7 +254,7 @@ function emitMatrixLibrary(
   emit();
   emit('; (Re)start a sound cue. A = duration in row ticks (8 per frame),');
   emit('; C = divider half-period; smaller is higher pitch.');
-  emitRoutine(emit, 'SndStart', 'in A,C clobbers A');
+  emitRoutine(emit, 'SndStart', 'in A,C clobbers A,carry,zero,sign,parity,halfCarry');
   op('ld      (SoundTimer),a');
   op('ld      a,c');
   op('ld      (SndDivReload),a');
@@ -260,7 +264,7 @@ function emitMatrixLibrary(
   op('ret');
   emit();
   emit('; Tick the speaker state machine once per row scan.');
-  emitRoutine(emit, 'SndService', 'clobbers A');
+  emitRoutine(emit, 'SndService', 'clobbers A,carry,zero,sign,parity,halfCarry');
   op('ld      a,(SoundTimer)');
   op('or      a');
   op('ret     z');
@@ -284,7 +288,7 @@ function emitMatrixLibrary(
   op('ret');
   emit();
   emit('; Strobe one seven-segment digit and advance the scan index.');
-  emitRoutine(emit, 'HudScanDig', 'clobbers A,BC,DE,HL');
+  emitRoutine(emit, 'HudScanDig', 'clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry');
   op('ld      a,(HudScanIndex)');
   op('ld      c,a');
   op('ld      a,(SpeakerPort)');
@@ -316,7 +320,7 @@ function emitMatrixLibrary(
   op('ret');
   emit();
   emit('; Zero all six HUD digits.');
-  emitRoutine(emit, 'HudBlankDig', 'clobbers A,B,HL');
+  emitRoutine(emit, 'HudBlankDig', 'clobbers A,B,HL,carry,zero,sign,parity,halfCarry');
   op('ld      hl,HudSegBuffer');
   op('ld      b,6');
   op('xor     a');
@@ -328,7 +332,11 @@ function emitMatrixLibrary(
   emit();
   emit('; Encode HL as decimal into the HUD: slot 0 shows 0, slots 1-5');
   emit('; the 10000..1 digits.');
-  emitRoutine(emit, 'HudWriteU16', 'in HL out BC,HL clobbers A,DE');
+  emitRoutine(
+    emit,
+    'HudWriteU16',
+    'in HL out BC,HL clobbers A,DE,carry,zero,sign,parity,halfCarry',
+  );
   op('ld      a,(HudGlyphTbl)');
   op('ld      (HudSegBuffer),a');
   op('ld      bc,HudSegBuffer + 1');
@@ -345,7 +353,11 @@ function emitMatrixLibrary(
   op('ret');
   emit();
   emit('; One decimal place value: count DE out of HL, emit the glyph.');
-  emitRoutine(emit, 'HudDecDigit', 'in HL,DE,BC out BC,HL clobbers A,DE');
+  emitRoutine(
+    emit,
+    'HudDecDigit',
+    'in HL,DE,BC out BC,HL clobbers A,DE,carry,zero,sign,parity,halfCarry',
+  );
   op('xor     a');
   emit('_loop:');
   op('push    af');

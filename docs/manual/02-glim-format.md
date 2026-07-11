@@ -283,10 +283,11 @@ commit phase), polls, then runs the effect phases. Render blocks write
 ordinary memory through the profile library — `NamePut` (tile A at
 column D, row E of the name-table shadow), `SpriteSet` (slot A to D=x,
 E=y), `SpriteInit` (slot A's pattern D and colour E) — and never touch
-VDP timing. One-time uploads (sprite patterns, tiles, colours) use
-`VdpSetAddrWrite`/`VdpWriteBlock`/`VdpFill` from an enter block, with
-the tables in an imported AZM module; `VC_*` equates name the fifteen
-VDP colours. Sprites use contiguous slots from 0. Sound cues, shapes,
+VDP timing. `sprite` and `tile` declarations generate their patterns,
+colour groups, slot setup, and one-time `LoadResourcesVram` upload;
+hand-written modules can still use `VdpSetAddrWrite`, `VdpWriteBlock`,
+and `VdpFill` for custom data. `VC_*` equates name the sixteen VDP
+colour codes. Sprites use contiguous slots from 0. Sound cues, shapes,
 and the seven-segment HUD service are matrix-profile features.
 
 Sprites and tiles are declarations on this profile:

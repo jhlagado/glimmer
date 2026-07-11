@@ -51,34 +51,35 @@ or change purpose.
 | `trail.glim`                      | v0.3 byte array example: moving dot stamps an 8-row trail buffer            |
 | `trail-blocks.glim`               | Trail's blocks as a part: the multi-file demonstration                      |
 | `snake.glim` + `snake-rules.glim` | The first complete game (multi-file); `snake-lib.asm` is an imported module |
+| `tetro.glim` + `tetro-rules.glim` | Matrix acceptance game; `tetro-lib.asm` is its irreducible engine module    |
+| `sprite-chase.glim`               | TMS9918 acceptance game with declarative sprite and tile resources          |
 
-The repo root also carries `debug80.json` with `dot` and `slide` targets so
-the generated `examples/*.main.asm` programs run under Debug80's TEC-1G
-platform (the `.main.asm` suffix is Debug80's entry-point naming
-convention).
+The repo root also carries `debug80.json` with generated-assembly targets
+and native `.glim` targets. `tetro-glim` is the default: Debug80 invokes
+Glimmer through its in-process build API and debugs the original source.
 
 ## corpus/
 
 | Directory  | Purpose                                                                  |
 | ---------- | ------------------------------------------------------------------------ |
 | `tetro/`   | Tetro + Pacmo game suite snapshot (8x8 matrix, MON-3); adaptation target |
-| `tms9918/` | TMS9918 demo programs; reference idioms for the future VDP profile       |
+| `tms9918/` | TMS9918 demo programs; reference idioms for the implemented VDP profile  |
 
 ## sketches/
 
-| File                | Purpose                                                          |
-| ------------------- | ---------------------------------------------------------------- |
-| `README.md`         | Format proposals P1–P9 raised by the sketches                    |
-| `tetro.glim`        | Aspirational Tetro in Glimmer; the headline-goal design artifact |
-| `sprite-chase.glim` | Aspirational interactive TMS9918 program; first VDP-profile item |
+| File                | Purpose                                                    |
+| ------------------- | ---------------------------------------------------------- |
+| `README.md`         | Design history; P1–P9 proposals (all landed or closed)     |
+| `tetro.glim`        | Early Tetro syntax sketch (see `examples/tetro.glim`)      |
+| `sprite-chase.glim` | Early VDP syntax sketch (see `examples/sprite-chase.glim`) |
 
 ## docs/
 
 | File                        | Purpose                                                    |
 | --------------------------- | ---------------------------------------------------------- |
 | `glimmer.md`                | Design specification (John's document; not auto-formatted) |
-| `roadmap.md`                | Milestones, platform findings, open questions              |
+| `roadmap.md`                | Shipped line, acceptance programs, next language phase     |
 | `codebase/`                 | This engineering manual                                    |
-| `manual/`                   | User manual draft, future debug80-docs section             |
+| `manual/`                   | User manual and source draft for the debug80.com section   |
 | `reference/glim-grammar.md` | Formal grammar and syntax design rules                     |
-| `plans/v0.3.md`             | v0.3 work plan: resources, arrays, flag banks              |
+| `plans/`                    | Completed implementation and release plans                 |

@@ -70,7 +70,8 @@ consumes:
 - `CurveDecl` — build-time byte lookup table emitted as a page-aligned
   `Curve_<Name>` data table
 - `RoutineDecl` — callable helper block: no triggers, no dispatch;
-  emitted as a public `@Name:` boundary, body verbatim, ret appended
+  emitted as a bare `.routine` boundary followed by an ordinary entry
+  label, body verbatim, ret appended
 - `CardDecl` — a screen/mode; `card` lines start sections, blocks carry
   `card`/`enter`/`goto` fields, and the generator emits the `Card`
   enum, the `CurrentCard` cell, card-gated dispatch, and the
@@ -185,7 +186,7 @@ Notable constraints the generator honours:
   `HudBlankDig`, and the glyph/mask tables (adapted from the corpus
   shared layer, 0BSD).
 - **Sound cues**: `sound Name len N div N` is implemented only for the
-  matrix profile. The generator emits `@Snd_Name` wrappers that load A/C
+  matrix profile. The generator emits `Snd_Name` wrappers that load A/C
   and jump to `SndStart`; the scan service plays the cue in the background.
 - **Curves**: `curve Name preset steps N from A to B` emits a page-aligned
   `Curve_Name` byte table. The compiler computes easing at build time;
@@ -216,7 +217,8 @@ rollover. The CLI's `--deps` prints the reactive graph via
 
 ## Profiles
 
-`generateAzm` branches on `program.platform`:
+`generateAzm` selects a `Profile` from `program.platform` and
+`program.display`:
 
 - **Generic** (no `platform` statement): placeholder `API_*` equates,
   PrevKeys edge detection, flush-style loop. Kept for tests and for

@@ -544,7 +544,7 @@ GlimEndFrame:
 ; Scan all 8 rows with fixed dwell, then blank the matrix so
 ; block work never changes visible row brightness. Sound and the
 ; seven-segment HUD are serviced once per row (8 ticks per frame).
-.routine clobbers A,BC,DE,HL
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 ScanFrame:
         ld      hl,Framebuffer
         ld      c,%00000001          ; row select mask
@@ -579,7 +579,7 @@ _dwell:
         ret
 
 ; Convert x (0-7, 0 = leftmost) to the matrix bit convention.
-.routine in A out A clobbers B
+.routine in A out A clobbers B,carry,zero,sign,parity,halfCarry
 MxMask:
         or      a
         ld      b,a
@@ -592,7 +592,7 @@ _loop:
 
 ; Set one pixel. B = x (0-7), C = y (0-7), A = colour bits
 ; (COLOR_RED/GREEN/BLUE, OR-combined). ORs into the framebuffer.
-.routine in A,B,C clobbers A,B,DE,HL
+.routine in A,B,C clobbers A,B,DE,HL,carry,zero,sign,parity,halfCarry
 FbPlot:
         ld      d,a                  ; D = colour bits
         ld      a,c
@@ -631,7 +631,7 @@ _blue:
         ret
 
 ; Clear the whole framebuffer.
-.routine clobbers A,B,HL
+.routine clobbers A,B,HL,carry,zero,sign,parity,halfCarry
 FbClear:
         ld      hl,Framebuffer
         ld      b,32
@@ -644,7 +644,7 @@ _loop:
 
 ; (Re)start a sound cue. A = duration in row ticks (8 per frame),
 ; C = divider half-period; smaller is higher pitch.
-.routine in A,C clobbers A
+.routine in A,C clobbers A,carry,zero,sign,parity,halfCarry
 SndStart:
         ld      (SoundTimer),a
         ld      a,c
@@ -655,7 +655,7 @@ SndStart:
         ret
 
 ; Tick the speaker state machine once per row scan.
-.routine clobbers A
+.routine clobbers A,carry,zero,sign,parity,halfCarry
 SndService:
         ld      a,(SoundTimer)
         or      a
@@ -680,7 +680,7 @@ _active:
         ret
 
 ; Strobe one seven-segment digit and advance the scan index.
-.routine clobbers A,BC,DE,HL
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 HudScanDig:
         ld      a,(HudScanIndex)
         ld      c,a
@@ -713,7 +713,7 @@ _save:
         ret
 
 ; Zero all six HUD digits.
-.routine clobbers A,B,HL
+.routine clobbers A,B,HL,carry,zero,sign,parity,halfCarry
 HudBlankDig:
         ld      hl,HudSegBuffer
         ld      b,6
@@ -726,7 +726,7 @@ _loop:
 
 ; Encode HL as decimal into the HUD: slot 0 shows 0, slots 1-5
 ; the 10000..1 digits.
-.routine in HL out BC,HL clobbers A,DE
+.routine in HL out BC,HL clobbers A,DE,carry,zero,sign,parity,halfCarry
 HudWriteU16:
         ld      a,(HudGlyphTbl)
         ld      (HudSegBuffer),a
@@ -744,7 +744,7 @@ HudWriteU16:
         ret
 
 ; One decimal place value: count DE out of HL, emit the glyph.
-.routine in HL,DE,BC out BC,HL clobbers A,DE
+.routine in HL,DE,BC out BC,HL clobbers A,DE,carry,zero,sign,parity,halfCarry
 HudDecDigit:
         xor     a
 _loop:
@@ -1117,7 +1117,7 @@ Snd_Arrive:
 ; Scan all 8 rows with fixed dwell, then blank the matrix so
 ; block work never changes visible row brightness. Sound and the
 ; seven-segment HUD are serviced once per row (8 ticks per frame).
-.routine clobbers A,BC,DE,HL
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 ScanFrame:
         ld      hl,Framebuffer
         ld      c,%00000001          ; row select mask
@@ -1152,7 +1152,7 @@ _dwell:
         ret
 
 ; Convert x (0-7, 0 = leftmost) to the matrix bit convention.
-.routine in A out A clobbers B
+.routine in A out A clobbers B,carry,zero,sign,parity,halfCarry
 MxMask:
         or      a
         ld      b,a
@@ -1165,7 +1165,7 @@ _loop:
 
 ; Set one pixel. B = x (0-7), C = y (0-7), A = colour bits
 ; (COLOR_RED/GREEN/BLUE, OR-combined). ORs into the framebuffer.
-.routine in A,B,C clobbers A,B,DE,HL
+.routine in A,B,C clobbers A,B,DE,HL,carry,zero,sign,parity,halfCarry
 FbPlot:
         ld      d,a                  ; D = colour bits
         ld      a,c
@@ -1205,7 +1205,7 @@ _blue:
 
 ; Draw a shape resource. HL = Shape_<Name>, B = x, C = y.
 ; No clipping: keep the whole shape inside the 8x8 matrix.
-.routine in B,C,HL clobbers A,BC,DE,HL
+.routine in B,C,HL clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 ShapeDraw:
         ld      (ShapePtr),hl
         ld      a,b
@@ -1273,7 +1273,7 @@ _nextrow:
         jr      _row
 
 ; Clear the whole framebuffer.
-.routine clobbers A,B,HL
+.routine clobbers A,B,HL,carry,zero,sign,parity,halfCarry
 FbClear:
         ld      hl,Framebuffer
         ld      b,32
@@ -1286,7 +1286,7 @@ _loop:
 
 ; (Re)start a sound cue. A = duration in row ticks (8 per frame),
 ; C = divider half-period; smaller is higher pitch.
-.routine in A,C clobbers A
+.routine in A,C clobbers A,carry,zero,sign,parity,halfCarry
 SndStart:
         ld      (SoundTimer),a
         ld      a,c
@@ -1297,7 +1297,7 @@ SndStart:
         ret
 
 ; Tick the speaker state machine once per row scan.
-.routine clobbers A
+.routine clobbers A,carry,zero,sign,parity,halfCarry
 SndService:
         ld      a,(SoundTimer)
         or      a
@@ -1322,7 +1322,7 @@ _active:
         ret
 
 ; Strobe one seven-segment digit and advance the scan index.
-.routine clobbers A,BC,DE,HL
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 HudScanDig:
         ld      a,(HudScanIndex)
         ld      c,a
@@ -1355,7 +1355,7 @@ _save:
         ret
 
 ; Zero all six HUD digits.
-.routine clobbers A,B,HL
+.routine clobbers A,B,HL,carry,zero,sign,parity,halfCarry
 HudBlankDig:
         ld      hl,HudSegBuffer
         ld      b,6
@@ -1368,7 +1368,7 @@ _loop:
 
 ; Encode HL as decimal into the HUD: slot 0 shows 0, slots 1-5
 ; the 10000..1 digits.
-.routine in HL out BC,HL clobbers A,DE
+.routine in HL out BC,HL clobbers A,DE,carry,zero,sign,parity,halfCarry
 HudWriteU16:
         ld      a,(HudGlyphTbl)
         ld      (HudSegBuffer),a
@@ -1386,7 +1386,7 @@ HudWriteU16:
         ret
 
 ; One decimal place value: count DE out of HL, emit the glyph.
-.routine in HL,DE,BC out BC,HL clobbers A,DE
+.routine in HL,DE,BC out BC,HL clobbers A,DE,carry,zero,sign,parity,halfCarry
 HudDecDigit:
         xor     a
 _loop:
@@ -1950,7 +1950,7 @@ Snd_Die:
 ; Scan all 8 rows with fixed dwell, then blank the matrix so
 ; block work never changes visible row brightness. Sound and the
 ; seven-segment HUD are serviced once per row (8 ticks per frame).
-.routine clobbers A,BC,DE,HL
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 ScanFrame:
         ld      hl,Framebuffer
         ld      c,%00000001          ; row select mask
@@ -1985,7 +1985,7 @@ _dwell:
         ret
 
 ; Convert x (0-7, 0 = leftmost) to the matrix bit convention.
-.routine in A out A clobbers B
+.routine in A out A clobbers B,carry,zero,sign,parity,halfCarry
 MxMask:
         or      a
         ld      b,a
@@ -1998,7 +1998,7 @@ _loop:
 
 ; Set one pixel. B = x (0-7), C = y (0-7), A = colour bits
 ; (COLOR_RED/GREEN/BLUE, OR-combined). ORs into the framebuffer.
-.routine in A,B,C clobbers A,B,DE,HL
+.routine in A,B,C clobbers A,B,DE,HL,carry,zero,sign,parity,halfCarry
 FbPlot:
         ld      d,a                  ; D = colour bits
         ld      a,c
@@ -2037,7 +2037,7 @@ _blue:
         ret
 
 ; Clear the whole framebuffer.
-.routine clobbers A,B,HL
+.routine clobbers A,B,HL,carry,zero,sign,parity,halfCarry
 FbClear:
         ld      hl,Framebuffer
         ld      b,32
@@ -2050,7 +2050,7 @@ _loop:
 
 ; (Re)start a sound cue. A = duration in row ticks (8 per frame),
 ; C = divider half-period; smaller is higher pitch.
-.routine in A,C clobbers A
+.routine in A,C clobbers A,carry,zero,sign,parity,halfCarry
 SndStart:
         ld      (SoundTimer),a
         ld      a,c
@@ -2061,7 +2061,7 @@ SndStart:
         ret
 
 ; Tick the speaker state machine once per row scan.
-.routine clobbers A
+.routine clobbers A,carry,zero,sign,parity,halfCarry
 SndService:
         ld      a,(SoundTimer)
         or      a
@@ -2086,7 +2086,7 @@ _active:
         ret
 
 ; Strobe one seven-segment digit and advance the scan index.
-.routine clobbers A,BC,DE,HL
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 HudScanDig:
         ld      a,(HudScanIndex)
         ld      c,a
@@ -2119,7 +2119,7 @@ _save:
         ret
 
 ; Zero all six HUD digits.
-.routine clobbers A,B,HL
+.routine clobbers A,B,HL,carry,zero,sign,parity,halfCarry
 HudBlankDig:
         ld      hl,HudSegBuffer
         ld      b,6
@@ -2132,7 +2132,7 @@ _loop:
 
 ; Encode HL as decimal into the HUD: slot 0 shows 0, slots 1-5
 ; the 10000..1 digits.
-.routine in HL out BC,HL clobbers A,DE
+.routine in HL out BC,HL clobbers A,DE,carry,zero,sign,parity,halfCarry
 HudWriteU16:
         ld      a,(HudGlyphTbl)
         ld      (HudSegBuffer),a
@@ -2150,7 +2150,7 @@ HudWriteU16:
         ret
 
 ; One decimal place value: count DE out of HL, emit the glyph.
-.routine in HL,DE,BC out BC,HL clobbers A,DE
+.routine in HL,DE,BC out BC,HL clobbers A,DE,carry,zero,sign,parity,halfCarry
 HudDecDigit:
         xor     a
 _loop:
@@ -2789,7 +2789,7 @@ GlimEndFrame:
         ret
 
 ; --- commit: flush dirty shadows to VRAM ---
-.routine clobbers A,BC,DE,HL,F
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 GlimCommit:
         ld      a,(SpriteDirty)
         or      a
@@ -2848,7 +2848,7 @@ _next:
 ; --- tms9918 profile library ---
 
 ; Set the VRAM write address (low byte, then high|$40).
-.routine in HL clobbers A
+.routine in HL clobbers A,carry,zero,sign,parity,halfCarry
 VdpSetAddrWrite:
         ld      a,l
         out     (VDP_CONTROL),a
@@ -2858,7 +2858,7 @@ VdpSetAddrWrite:
         ret
 
 ; Stream BC bytes from HL to the data port (address already set).
-.routine in HL,BC clobbers A,BC,HL,F
+.routine in HL,BC clobbers A,BC,HL,carry,zero,sign,parity,halfCarry
 VdpWriteBlock:
 _loop:
         ld      a,(hl)
@@ -2871,7 +2871,7 @@ _loop:
         ret
 
 ; Fill BC bytes of VRAM at HL with E.
-.routine in HL,BC,E clobbers A,BC,F
+.routine in HL,BC,E clobbers A,BC,carry,zero,sign,parity,halfCarry
 VdpFill:
         call    VdpSetAddrWrite
 _loop:
@@ -2884,7 +2884,7 @@ _loop:
         ret
 
 ; Wait for the vblank flag (reading the status register clears it).
-.routine clobbers A,F
+.routine clobbers A,carry,zero,sign,parity,halfCarry
 VdpWaitVBlank:
 _wait:
         in      a,(VDP_CONTROL)
@@ -2893,7 +2893,7 @@ _wait:
         ret
 
 ; Position sprite slot A at D=x, E=y (shadow write; commit flushes).
-.routine in A,D,E clobbers A,HL,F
+.routine in A,D,E clobbers A,HL,carry,zero,sign,parity,halfCarry
 SpriteSet:
         add     a,a
         add     a,a                  ; slot*4
@@ -2911,7 +2911,7 @@ SpriteSet:
         ret
 
 ; Assign sprite slot A its pattern number D and colour E.
-.routine in A,D,E clobbers A,HL,F
+.routine in A,D,E clobbers A,HL,carry,zero,sign,parity,halfCarry
 SpriteInit:
         add     a,a
         add     a,a
@@ -2932,7 +2932,7 @@ SpriteInit:
 
 ; Put tile A at column D, row E of the name-table shadow and mark
 ; the row dirty.
-.routine in A,D,E clobbers A,BC,HL,F
+.routine in A,D,E clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 NamePut:
         ld      c,a                  ; C = tile index
         ld      l,e
@@ -2979,7 +2979,7 @@ _mask:
         ret
 
 ; Flush one shadow name-table row (A = row 0..23) to VRAM.
-.routine in A clobbers A,BC,DE,HL,F
+.routine in A clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 CommitNameRow:
         ld      l,a
         ld      h,0
@@ -3003,7 +3003,7 @@ CommitNameRow:
 ; white-on-black, pattern and name tables cleared, all sprites
 ; hidden (Y=$D1 also terminates sprite processing at the first
 ; unused slot — use contiguous slots from 0).
-.routine clobbers A,BC,DE,HL,F
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 VdpInit:
         ld      hl,VdpRegInitTbl
         ld      b,8
@@ -3064,7 +3064,7 @@ end
 ; Upload sprite/tile patterns and the colour groups; assign each
 ; sprite slot's pattern and colour in the shadow. Called once from
 ; the loop init, after VdpInit.
-.routine clobbers A,BC,DE,HL,F
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 LoadResourcesVram:
         ld      hl,VRAM_SPRITE_PAT
         call    VdpSetAddrWrite
@@ -4243,7 +4243,7 @@ Snd_Over:
 ; Scan all 8 rows with fixed dwell, then blank the matrix so
 ; block work never changes visible row brightness. Sound and the
 ; seven-segment HUD are serviced once per row (8 ticks per frame).
-.routine clobbers A,BC,DE,HL
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 ScanFrame:
         ld      hl,Framebuffer
         ld      c,%00000001          ; row select mask
@@ -4278,7 +4278,7 @@ _dwell:
         ret
 
 ; Convert x (0-7, 0 = leftmost) to the matrix bit convention.
-.routine in A out A clobbers B
+.routine in A out A clobbers B,carry,zero,sign,parity,halfCarry
 MxMask:
         or      a
         ld      b,a
@@ -4291,7 +4291,7 @@ _loop:
 
 ; Set one pixel. B = x (0-7), C = y (0-7), A = colour bits
 ; (COLOR_RED/GREEN/BLUE, OR-combined). ORs into the framebuffer.
-.routine in A,B,C clobbers A,B,DE,HL
+.routine in A,B,C clobbers A,B,DE,HL,carry,zero,sign,parity,halfCarry
 FbPlot:
         ld      d,a                  ; D = colour bits
         ld      a,c
@@ -4330,7 +4330,7 @@ _blue:
         ret
 
 ; Clear the whole framebuffer.
-.routine clobbers A,B,HL
+.routine clobbers A,B,HL,carry,zero,sign,parity,halfCarry
 FbClear:
         ld      hl,Framebuffer
         ld      b,32
@@ -4343,7 +4343,7 @@ _loop:
 
 ; (Re)start a sound cue. A = duration in row ticks (8 per frame),
 ; C = divider half-period; smaller is higher pitch.
-.routine in A,C clobbers A
+.routine in A,C clobbers A,carry,zero,sign,parity,halfCarry
 SndStart:
         ld      (SoundTimer),a
         ld      a,c
@@ -4354,7 +4354,7 @@ SndStart:
         ret
 
 ; Tick the speaker state machine once per row scan.
-.routine clobbers A
+.routine clobbers A,carry,zero,sign,parity,halfCarry
 SndService:
         ld      a,(SoundTimer)
         or      a
@@ -4379,7 +4379,7 @@ _active:
         ret
 
 ; Strobe one seven-segment digit and advance the scan index.
-.routine clobbers A,BC,DE,HL
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 HudScanDig:
         ld      a,(HudScanIndex)
         ld      c,a
@@ -4412,7 +4412,7 @@ _save:
         ret
 
 ; Zero all six HUD digits.
-.routine clobbers A,B,HL
+.routine clobbers A,B,HL,carry,zero,sign,parity,halfCarry
 HudBlankDig:
         ld      hl,HudSegBuffer
         ld      b,6
@@ -4425,7 +4425,7 @@ _loop:
 
 ; Encode HL as decimal into the HUD: slot 0 shows 0, slots 1-5
 ; the 10000..1 digits.
-.routine in HL out BC,HL clobbers A,DE
+.routine in HL out BC,HL clobbers A,DE,carry,zero,sign,parity,halfCarry
 HudWriteU16:
         ld      a,(HudGlyphTbl)
         ld      (HudSegBuffer),a
@@ -4443,7 +4443,7 @@ HudWriteU16:
         ret
 
 ; One decimal place value: count DE out of HL, emit the glyph.
-.routine in HL,DE,BC out BC,HL clobbers A,DE
+.routine in HL,DE,BC out BC,HL clobbers A,DE,carry,zero,sign,parity,halfCarry
 HudDecDigit:
         xor     a
 _loop:
@@ -4890,7 +4890,7 @@ GlimEndFrame:
 ; Scan all 8 rows with fixed dwell, then blank the matrix so
 ; block work never changes visible row brightness. Sound and the
 ; seven-segment HUD are serviced once per row (8 ticks per frame).
-.routine clobbers A,BC,DE,HL
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 ScanFrame:
         ld      hl,Framebuffer
         ld      c,%00000001          ; row select mask
@@ -4925,7 +4925,7 @@ _dwell:
         ret
 
 ; Convert x (0-7, 0 = leftmost) to the matrix bit convention.
-.routine in A out A clobbers B
+.routine in A out A clobbers B,carry,zero,sign,parity,halfCarry
 MxMask:
         or      a
         ld      b,a
@@ -4938,7 +4938,7 @@ _loop:
 
 ; Set one pixel. B = x (0-7), C = y (0-7), A = colour bits
 ; (COLOR_RED/GREEN/BLUE, OR-combined). ORs into the framebuffer.
-.routine in A,B,C clobbers A,B,DE,HL
+.routine in A,B,C clobbers A,B,DE,HL,carry,zero,sign,parity,halfCarry
 FbPlot:
         ld      d,a                  ; D = colour bits
         ld      a,c
@@ -4977,7 +4977,7 @@ _blue:
         ret
 
 ; Clear the whole framebuffer.
-.routine clobbers A,B,HL
+.routine clobbers A,B,HL,carry,zero,sign,parity,halfCarry
 FbClear:
         ld      hl,Framebuffer
         ld      b,32
@@ -4990,7 +4990,7 @@ _loop:
 
 ; (Re)start a sound cue. A = duration in row ticks (8 per frame),
 ; C = divider half-period; smaller is higher pitch.
-.routine in A,C clobbers A
+.routine in A,C clobbers A,carry,zero,sign,parity,halfCarry
 SndStart:
         ld      (SoundTimer),a
         ld      a,c
@@ -5001,7 +5001,7 @@ SndStart:
         ret
 
 ; Tick the speaker state machine once per row scan.
-.routine clobbers A
+.routine clobbers A,carry,zero,sign,parity,halfCarry
 SndService:
         ld      a,(SoundTimer)
         or      a
@@ -5026,7 +5026,7 @@ _active:
         ret
 
 ; Strobe one seven-segment digit and advance the scan index.
-.routine clobbers A,BC,DE,HL
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 HudScanDig:
         ld      a,(HudScanIndex)
         ld      c,a
@@ -5059,7 +5059,7 @@ _save:
         ret
 
 ; Zero all six HUD digits.
-.routine clobbers A,B,HL
+.routine clobbers A,B,HL,carry,zero,sign,parity,halfCarry
 HudBlankDig:
         ld      hl,HudSegBuffer
         ld      b,6
@@ -5072,7 +5072,7 @@ _loop:
 
 ; Encode HL as decimal into the HUD: slot 0 shows 0, slots 1-5
 ; the 10000..1 digits.
-.routine in HL out BC,HL clobbers A,DE
+.routine in HL out BC,HL clobbers A,DE,carry,zero,sign,parity,halfCarry
 HudWriteU16:
         ld      a,(HudGlyphTbl)
         ld      (HudSegBuffer),a
@@ -5090,7 +5090,7 @@ HudWriteU16:
         ret
 
 ; One decimal place value: count DE out of HL, emit the glyph.
-.routine in HL,DE,BC out BC,HL clobbers A,DE
+.routine in HL,DE,BC out BC,HL clobbers A,DE,carry,zero,sign,parity,halfCarry
 HudDecDigit:
         xor     a
 _loop:

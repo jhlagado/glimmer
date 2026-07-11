@@ -42,7 +42,7 @@ _hit:
         ret
 
 ; Plot one packed position. A = position, D = colour bits.
-.routine in A,D clobbers A,BC,DE,HL,F
+.routine in A,D clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 @PlotPos:
         ld      e,a
         and     %00000111
@@ -59,7 +59,7 @@ _hit:
 
 ; Draw the whole body: Len cells backwards from HeadIdx in green,
 ; then the head again in white (FbPlot ORs, so white wins).
-.routine clobbers A,BC,DE,HL,F
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 @DrawBody:
         ld      a,(Len)
         or      a

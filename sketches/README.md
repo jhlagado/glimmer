@@ -1,91 +1,50 @@
 # Format Sketches
 
-Aspirational `.glim` files. **None of these compile yet.** They are design
-artifacts: each one takes a real corpus program and asks what it _should_
-look like in Glimmer. Where a sketch needs something v0 does not have,
-that is a numbered format proposal, catalogued below and folded into the
-[roadmap](../roadmap.md) milestones.
+Design history. These files drove the format proposals below; the
+working programs now live in [`examples/`](../examples/). The sketches
+themselves are not maintained as compile targets — treat
+`examples/tetro.glim` and `examples/sprite-chase.glim` as the authority.
 
-- `tetro.glim` — the headline goal, adapted from `corpus/tetro`. The full
-  workout: cards, held bindings, timers, array state, resources, sounds,
-  routines.
-- `sprite-chase.glim` — graduated to `examples/` 2026-07-10 (first cut:
-  no sprite/tile resource syntax yet — patterns in an imported module;
-  the sketch's `sprite`/`tile` declarations remain the open P6 design).
+- `tetro.glim` — early full-program sketch adapted from `corpus/tetro`
+  (cards, held bindings, timers, arrays, resources, routines).
+- `sprite-chase.glim` — early TMS9918 sketch; graduated to `examples/`
+  once sprite/tile resources landed.
 
-## Format proposals raised by the sketches
+## Format proposals
 
-- **P1 — Platform and display declarations** (landed: matrix8x8 2026-07-06, tms9918 2026-07-10)**.** `platform tec1g-mon3` and
-  `display matrix8x8` / `display tms9918 mode graphics1` select the
-  profile: real port/API equates, the loop skeleton (scan-driven vs
-  vblank-paced), and the profile library (framebuffer or VRAM helpers).
-- **P2 — Array state.** `state BoardRows : byte[8]`. Change tracking stays
-  per-cell (the whole array is one change flag); Tetro treats the board as
-  one unit already.
-- **P3 — Cards** (landed 2026-07-10)**.** `card Splash / Playing / GameOver` as first-class
-  modes (HyperCard sense: screens; exactly one active). A `card` line
-  starts a **section** — everything after it belongs to that card until
-  the next `card` line or end of file; there is no closing keyword, so
-  the language stays nesting-free. A built-in `CurrentCard` state cell
-  plus a generated `Card` enum; effects in a card's section only
-  dispatch while it is active; `enter` effects run once on card entry
-  (triggered by `CurrentCard` changing). This replaces Tetro's
-  hand-rolled flag dispatch (`GameOver`/`SplashTimer`/`Paused` checks at
-  the top of LogicTick).
-- **P4 — Held bindings and timers.** `bind key ... held period N ->`
-  for autorepeat (Tetro's MoveCooldown pattern), alongside `rising`.
-  `timer Gravity = 32 -> GravityFire` declares a per-frame countdown
-  cell that fires a pulse and reloads; the cell is writable state, so
-  difficulty curves (gravity speeding up at 2000 points) are ordinary
-  `updates`.
-- **P5 — Routines** (landed 2026-07-10)**.** `routine <Name>` declarations: callable helper
-  blocks (collision checks, geometry) that are not effects — no
-  triggers, no dispatch, just a named, contract-carrying routine many
-  effects call.
-- **P6 — Resources** (landed 2026-07-10/11: shapes incl. rotations, sounds, curves, sprites, tiles, text + lcd_row/sprite_at/tile_at ops; LCD scripts remain out)**.** Declarative data compiled to `.db` tables:
-  `shape` (pixel-art rows with a colour), `sound` (duration + divider,
-  generating a trigger routine), `text` (LCD strings). Pixel rows are
-  written as ASCII art (`"..XX...."`), which is both readable and
-  checkable. Where a resource offers callable sugar (`lcd_row`,
-  `sprite_at`), that sugar is an **AZM `op` definition emitted into the
-  generated file** — AZM ops take typed parameters
-  (`op lcd_row(msg imm16, row imm8)`) and expand inline, so effect
-  bodies invoke them as ordinary AZM. Glimmer adds no macro system of
-  its own.
-- **P7 — Word semantics** (closed 2026-07-11: documented as deliberately narrow)**.** 16-bit compares in ordinary effect code
-  (score thresholds) and word cells in `updates`. Already half-present in
-  v0 (word storage), needs change-flag semantics defined.
-- **P9 — Curves and ramps (easing).** Three orthogonal pieces composing
-  through the reactive graph. `curve SlideIn ease_out steps 16 from 0
-to 7`: the compiler does the floating-point easing at build time and
-  emits a ROM table precomputed in destination space (actual pixel
-  positions) — runtime cost is one indexed load (three instructions
-  with a page-aligned table via `.align`). Presets: linear, ease_in,
-  ease_out, ease_in_out, sine, overshoot, anticipation. Hand-tuned
-  value lists remain a later extension. `ramp Slide : byte steps 16 -> SlideDone`: a
-  monostable progress counter that steps each frame, marks its cell
-  changed each step, then stops and fires its pulse — retriggered by
-  an ordinary write to its cell (no new trigger syntax). A derive
-  effect maps ramp through curve into position. Envelopes are chained
-  ramps (completion pulse starts the next) or one longer table.
-  Platform precedent: the TMS9918 demo's precomputed sub-pixel phase
-  banks and Tetro's rotation tables. Depends on change-flag rollover
-  (per-frame producers need deferral, not dropping).
-- **P8 — Profile services.** Sound service, HUD scan, RNG, and (matrix)
-  the frame scanner are profile library routines the generated loop
-  calls — not user code, not generated glue. The sketches call them by
-  documented names (`Snd_*` wrappers, `HudWriteScore`, `Random`).
+All proposals raised by the sketches have landed or been closed. Open
+language work is tracked in the [roadmap](../docs/roadmap.md), not here.
 
-## Ground rules kept by the sketches
+- **P1 — Platform and display declarations** (landed: matrix8x8
+  2026-07-06, tms9918 2026-07-10). `platform tec1g-mon3` and
+  `display matrix8x8` / `display tms9918` select the profile.
+- **P2 — Array state** (landed). `state BoardRows : byte[8]`; one
+  change flag for the whole array.
+- **P3 — Cards** (landed 2026-07-10). `card Splash / Playing / GameOver`
+  as exclusive screens/modes; section syntax through the next `card`
+  line; `CurrentCard`, `enter`, and `goto`.
+- **P4 — Held bindings and timers** (landed). `bind key ... held
+period N ->` and `timer Name = N -> Pulse` (including `once`).
+- **P5 — Routines** (landed 2026-07-10). Callable `routine` blocks with
+  verbatim AZM bodies. Explicit source-level contract _clauses_ remain
+  the next language candidate (see roadmap); today Glimmer emits a bare
+  `.routine` for user routines and AZM infers from the body. Profile
+  library routines carry curated clauses, checked against the body by
+  AZM 0.3.3.
+- **P6 — Resources** (landed 2026-07-10/11). Shapes (incl. rotations),
+  sounds, curves, sprites, tiles, text, plus generated AZM ops
+  (`lcd_row`, `sprite_at`, `tile_at`). LCD scripts remain out.
+- **P7 — Word semantics** (closed 2026-07-11: deliberately narrow).
+- **P8 — Profile services** (landed). Sound, HUD, RNG, and the matrix
+  frame scanner are profile library routines the generated loop calls.
+- **P9 — Curves and ramps** (landed). Build-time easing tables and
+  monostable ramp counters composed through the reactive graph.
 
-- **No Glimmer syntax inside `begin`...`end`.** A body is verbatim AZM:
-  Z80 instructions, labels, `call`s to routines, and AZM `op`
-  invocations. Anything that looks like sugar (`lcd_row`, `sprite_at`,
-  `Snd_Rotate`) must exist in the generated file as a visible AZM `op`
-  or routine that Glimmer emitted from a declaration. One macro system,
-  owned by AZM.
-- Block bodies are real Z80 (AZM), unchanged in spirit from the
-  corpus code they adapt.
-- The runtime owns the loop; nothing in a sketch writes `MainLoop`.
-- Everything declarative compiles to inspectable AZM — no construct is
-  allowed that cannot be shown as generated assembly.
+## Ground rules kept from the sketches
+
+- **No Glimmer syntax inside `begin`...`end`.** A body is verbatim AZM.
+  Sugar such as `lcd_row` or `sprite_at` must appear in the generated
+  file as a visible AZM `op` or routine.
+- Block bodies stay real Z80, in the spirit of the corpus they adapt.
+- The runtime owns the loop; user programs do not write `MainLoop`.
+- Everything declarative compiles to inspectable AZM.

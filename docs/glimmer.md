@@ -311,8 +311,9 @@ end
 
 A routine is a callable helper: a named piece of Z80 with no triggers
 and no dispatch. Blocks call it with ordinary `call ClampX`. It compiles
-to a public `@ClampX:` boundary — AZM infers and injects its register
-contract like any other routine, and its plain labels are local to it.
+to a bare `.routine` boundary followed by `ClampX:`. AZM infers its
+register contract from the body under the generated file's `.contracts`
+policy; `_name` labels are local to the routine's entry label.
 The body falls through like a block body; the generator appends the
 `ret` (conditional early returns like `ret c` are fine).
 
@@ -405,8 +406,7 @@ symbols.
   named, one job.
 - **Card** — a screen or mode of the running program, in the HyperCard
   sense: Splash, Playing, GameOver. Exactly one card is active at a time,
-  tracked by a built-in `CurrentCard` state cell. Cards are a planned
-  construct; the design is in the sketches and roadmap.
+  tracked by a built-in `CurrentCard` state cell.
 - **State cell** — a named byte or word variable managed by the runtime.
 - **Pulse** — a one-frame cell carrying a transient command.
 - **Binding** — a declared connection from an input event to a pulse.
@@ -805,7 +805,7 @@ and includes the framebuffer library the render block calls. Build it, then
 run AZM when you want the HEX, binary, and Debug80 map artifacts:
 
 ```sh
-glimmer examples/dot.glim     ; writes examples/dot.main.asm and injects contracts
+glimmer examples/dot.glim     ; writes and contract-checks examples/dot.main.asm
 azm examples/dot.main.asm     ; writes .hex, .bin, and .d8.json
 ```
 
@@ -815,27 +815,15 @@ work in the generated AZM at source level.
 
 ## 10. Direction
 
-The near-term sequence, feature by feature, each proven against the
-corpus games:
+The first complete line has landed: held input, timers and ramps,
+resources and structured state, four change-flag banks, cards, multi-file
+programs, matrix and TMS9918 profiles, native Debug80 builds, and
+`.glim`-attributed breakpoints. `examples/tetro.glim` and
+`examples/sprite-chase.glim` are the acceptance programs; the files in
+`sketches/` are retained as design history.
 
-- **Held bindings and timers** — autorepeat movement and countdown pulses,
-  the two input patterns every action game uses.
-- **Resources and arrays** — sound cues, curve tables, matrix shape
-  tables, and byte array state are implemented. Next are richer data
-  tables.
-- **Scale** — four change-flag banks are implemented; word-cell change
-  semantics remain future work.
-- **Cards** — screens and modes as first-class sections, with `enter`
-  effects and generated card dispatch.
-- **Project structure** — blocks and resources as separately editable
-  records, `.import`-based output, dependency listings.
-- **The TMS9918 profile** — the second display, with its commit-style
-  loop.
-- **Debug80 integration** — `.glim` as a recognized language with syntax
-  highlighting, and glim-level source maps so breakpoints land in `.glim`
-  lines.
-
-The acceptance test for the whole direction: `tetro.glim` — the corpus
-Tetro game, expressed as Glimmer declarations and blocks, generating an
-AZM file that assembles into a playable game. A full draft of what that
-file should look like is in `sketches/tetro.glim`.
+The next language work should come from demonstrated program pressure,
+not completeness for its own sake. Current candidates are source-level
+contract clauses on `routine` declarations, reusable `.glim` libraries
+with a namespace model, and richer display or input profiles. Hardware
+and Debug80 playtests remain the final behavioural check for each profile.

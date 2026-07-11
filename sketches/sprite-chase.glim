@@ -1,6 +1,7 @@
-; sprite-chase.glim — design sketch (does not compile yet)
+; sprite-chase.glim — design history (not a compile target)
 ; =========================================================
-; The TMS9918 demos (corpus/tms9918) made interactive: steer a sprite
+; Early TMS9918 sketch. Working program: examples/sprite-chase.glim.
+; The demos (corpus/tms9918) made interactive: steer a sprite
 ; with the keypad to catch a fleeing target over a tile background.
 ; Small on purpose — this is the VDP counterpart of CounterToy, sized
 ; to be the first real program of the TMS9918 profile.

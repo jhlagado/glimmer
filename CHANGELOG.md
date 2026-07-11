@@ -3,6 +3,41 @@
 Versions are tagged in git and published to npm as `@jhlagado/glimmer`
 (0.4.0 is the first broadly usable published version).
 
+## 0.5.3 - 2026-07-11
+
+Patch release on the latest AZM 0.3 line.
+
+- Requires `@jhlagado/azm` ^0.3.4.
+- AZM 0.3.4 adds an opt-in case-insensitive symbol lookup mode. Glimmer
+  continues to use AZM's strict, case-sensitive default; generated and
+  user-written symbol spelling therefore retains its existing contract.
+- Includes the 0.5.2 source, contract-audit, CLI-symlink, documentation,
+  and regenerated-output changes in Git history. Version 0.5.2 was
+  published from that working state before it was committed.
+
+## 0.5.2 - 2026-07-11
+
+Patch release for the installed command-line entry point, AZM 0.3.3, and
+the documentation pass that closes the contract-seed park note.
+
+- Requires `@jhlagado/azm` ^0.3.3. Explicit profile-library `.routine`
+  clauses now pass AZM's body-vs-declaration check (flag clobbers that
+  were silently under-declared under 0.3.2 are listed as
+  `carry,zero,sign,parity,halfCarry`, not `F`).
+- The npm `glimmer` bin now recognises direct invocation through the
+  package manager's symlink. Version 0.5.1 could exit successfully
+  without running the CLI because `process.argv[1]` named the symlink
+  while `import.meta.url` named its resolved target.
+- The regression runs from TypeScript source on every test run; it no
+  longer depends on a pre-existing `dist/` directory.
+- The specification, manual, engineering reference, and roadmap now
+  describe the shipped `.routine` contract model and native Debug80
+  workflow consistently.
+- Sketches are documented as design history (P1–P9 landed or closed).
+  AZM 0.3.3's body check clears the old park note; Glimmer's next
+  language phase is source-level contract _syntax_ only.
+- npm package archives (`*.tgz`) are treated as generated artifacts.
+
 ## 0.5.1 - 2026-07-11
 
 Review pass over the AZM 0.3 migration. 0.5.0 was tagged but never

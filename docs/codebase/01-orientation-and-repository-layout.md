@@ -49,8 +49,8 @@ test/         vitest suites, including an AZM round-trip assembly test
 examples/     .glim example programs (generated .asm artifacts gitignored)
 corpus/       real TEC-1G programs (Tetro, Pacmo, TMS9918 demos) copied in
               as reference source and Glimmer-adaptation material
-sketches/     aspirational .glim drafts that define the target format
-              (do not compile; each gap is a numbered format proposal)
+sketches/     design-history .glim drafts; proposals P1–P9 all landed
+              or closed — working programs live in examples/
 docs/         specification, roadmap, this manual, user-manual draft
 dist/         build output (gitignored)
 ```

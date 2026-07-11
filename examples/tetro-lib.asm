@@ -37,7 +37,7 @@ ShiftCount:
 ; Recompute the piece pointer, right bound, and colour bits from the
 ; program's CurPieceIndex and CurRotation cells. Call after either
 ; changes.
-.routine clobbers A,C,DE,HL,F
+.routine clobbers A,C,DE,HL,carry,zero,sign,parity,halfCarry
 @SetCurPiece:
         ld      a,(CurPieceIndex)
         add     a,a
@@ -73,7 +73,7 @@ ShiftCount:
 
 ; Shift a piece-row bitmask A right by ShiftCount positions (MSB-left:
 ; SRL moves the piece toward higher-numbered columns).
-.routine in A out A clobbers C,F
+.routine in A out A clobbers C,carry,zero,sign,parity,halfCarry
 @ShiftRowMask:
         ld      c,a
         ld      a,(ShiftCount)
@@ -137,7 +137,7 @@ _exit:
         ret
 
 ; OR mask C into row L of the plane at DE.
-.routine in C,DE,L clobbers A,F
+.routine in C,DE,L clobbers A,carry,zero,sign,parity,halfCarry
 @OrPlaneRow:
         push    hl
         ld      h,0
@@ -149,7 +149,7 @@ _exit:
         ret
 
 ; Blit the active piece into the four board planes at PlayerX/PlayerY.
-.routine clobbers A,BC,DE,HL,F
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 @LockPiece:
         ld      a,(PlayerX)
         ld      (ShiftCount),a
@@ -196,7 +196,7 @@ _next:
 
 ; Collapse row E: every plane shifts rows 0..E-1 down one; row 0
 ; clears. Preserves DE.
-.routine in E clobbers A,B,HL,F
+.routine in E clobbers A,B,HL,carry,zero,sign,parity,halfCarry
 @CollapseRow:
         push    de
         ld      b,4                  ; four planes
@@ -233,7 +233,7 @@ _top:
 
 ; Bitmask of full rows (bit r = row r is $FF), without collapsing —
 ; the flash phase shows them before FinishClear collapses.
-.routine out A clobbers BC,HL,F
+.routine out A clobbers BC,HL,carry,zero,sign,parity,halfCarry
 @FullRowsMask:
         ld      c,0                  ; mask
         ld      b,8
@@ -260,7 +260,7 @@ _step:
 
 ; Clear every full row, collapsing the planes down. Out: A = rows
 ; cleared (0..4).
-.routine out A,E clobbers C,HL,F
+.routine out A,E clobbers C,HL,carry,zero,sign,parity,halfCarry
 @ClearFullRows:
         ld      c,0                  ; cleared count
         ld      e,7                  ; scan from the bottom row up
@@ -291,7 +291,7 @@ _done:
         ret
 
 ; Score delta for A cleared rows (clamped to 4). Out DE = delta.
-.routine in A out DE clobbers A,HL,F
+.routine in A out DE clobbers A,HL,carry,zero,sign,parity,halfCarry
 @ScoreForClears:
         cp      5
         jr      c,_ok
@@ -335,7 +335,7 @@ _have:
         ret
 
 ; Zero the 8 bytes at HL.
-.routine in HL clobbers A,B,HL,F
+.routine in HL clobbers A,B,HL,carry,zero,sign,parity,halfCarry
 @ZeroPlane:
         ld      b,8
         xor     a
@@ -365,7 +365,7 @@ _loop:
 ; Rebuild the framebuffer from the board planes, then overlay the
 ; active piece in its colour. Row-major: each matrix row is R,G,B,aux
 ; bytes at Framebuffer + row*4, MSB-left like the planes.
-.routine clobbers A,BC,DE,HL,F
+.routine clobbers A,BC,DE,HL,carry,zero,sign,parity,halfCarry
 @DrawBoardFb:
         ld      a,(PlayerX)
         ld      (ShiftCount),a

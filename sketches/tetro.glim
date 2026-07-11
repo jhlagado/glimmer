@@ -1,7 +1,7 @@
-; tetro.glim — design sketch (does not compile yet)
+; tetro.glim — design history (not a compile target)
 ; ==================================================
-; Tetro adapted to the Glimmer paradigm, from corpus/tetro.
-; Every construct beyond v0 is a numbered proposal in sketches/README.md.
+; Early sketch of Tetro in the Glimmer paradigm, from corpus/tetro.
+; Working program: examples/tetro.glim. Proposals: sketches/README.md.
 ;
 ; The goal reading this file: a person who knows the corpus Tetro should
 ; recognise every piece of it, and see that the hand-written dispatch,

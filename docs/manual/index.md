@@ -8,10 +8,9 @@ nav_exclude: true
 
 # Glimmer Manual
 
-> **Pre-alpha.** Glimmer is in early design. This manual is drafted
-> alongside the implementation so that documentation exists from day one,
-> but the format, names, and generated output described here will change.
-> It is not yet published; its eventual home is the Glimmer section of
+> Glimmer is an evolving 0.x format. The implemented language is published
+> as `@jhlagado/glimmer`; incompatible syntax may still change before 1.0.
+> This manual is also the source draft for the Glimmer section of
 > [debug80.com](https://debug80.com/).
 
 Glimmer is a preprocessor and project format for AZM, the assembler used
